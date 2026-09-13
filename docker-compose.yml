@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: feedbacklens-db
+    environment:
+      POSTGRES_USER: feedbacklens
+      POSTGRES_PASSWORD: feedbacklens
+      POSTGRES_DB: feedbacklens
+    ports:
+      # 5434 on the host so it doesn't clash with other local Postgres instances.
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedbacklens -d feedbacklens"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
