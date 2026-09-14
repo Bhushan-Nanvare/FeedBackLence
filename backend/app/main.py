@@ -1,13 +1,11 @@
-from typing import Annotated
-
-from fastapi import Depends, FastAPI, Response, status
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
 
+from app.api import jobs, sources
+from app.api.deps import SessionDep
 from app.config import get_settings
-from app.db import get_session
 
 app = FastAPI(title="FeedbackLens API", version="0.1.0")
 
@@ -18,7 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SessionDep = Annotated[Session, Depends(get_session)]
+app.include_router(sources.router)
+app.include_router(jobs.router)
 
 
 @app.get("/health")

@@ -42,7 +42,14 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-**3. Start the web app** at http://localhost:3000
+**3. Start the worker**, which runs imports and other background jobs
+
+```bash
+cd backend
+uv run python -m app.worker
+```
+
+**4. Start the web app** at http://localhost:3000
 
 ```bash
 cd web
@@ -53,6 +60,18 @@ npm run dev
 The home page shows whether the API, database and pgvector are reachable.
 
 Settings have working local defaults. To override them, copy `.env.example` to `.env` (backend) and `web/.env.example` to `web/.env.local` (frontend).
+
+## Import GitHub issues
+
+With the API and worker running, open http://localhost:8000/docs and:
+
+1. `POST /workspaces/demo/sources/github` with `{"repo": "microsoft/vscode", "backfill_days": 30}`
+2. `POST /workspaces/demo/sources/{source_id}/sync` to queue the import
+3. `GET /workspaces/demo/jobs/{job_id}` to watch it finish
+
+The first sync imports issues created in the last `backfill_days` (up to `max_items`). Later syncs only fetch issues updated since the previous run. Pull requests and bot posts are skipped, and template text, logs and screenshots are removed from each issue before any AI step reads it.
+
+Without a token GitHub allows 60 API requests per hour. Set `GITHUB_TOKEN` in `.env` to raise that to 5,000.
 
 ## Checks
 
@@ -72,6 +91,8 @@ cd web
 npm run lint
 npm run build
 ```
+
+Tests use a separate `feedbacklens_test` database, created and migrated automatically, so your local data is never touched.
 
 The same checks run in GitHub Actions on every push and pull request.
 

@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://feedbacklens:feedbacklens@localhost:5434/feedbacklens"
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Optional: without a token GitHub allows 60 requests/hour, with one 5,000.
+    github_token: str | None = None
+    worker_poll_interval_seconds: float = 2.0
 
 
 @lru_cache

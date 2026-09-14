@@ -2,6 +2,8 @@ services:
   db:
     image: pgvector/pgvector:pg17
     container_name: feedbacklens-db
+    # Come back up whenever Docker Desktop starts.
+    restart: unless-stopped
     environment:
       POSTGRES_USER: feedbacklens
       POSTGRES_PASSWORD: feedbacklens
