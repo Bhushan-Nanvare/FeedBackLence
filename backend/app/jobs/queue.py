@@ -29,11 +29,17 @@ def enqueue(
     return job
 
 
-def find_active(session: Session, kind: str, payload: dict[str, Any]) -> Job | None:
-    """Return a queued or running job of this kind whose payload contains `payload`."""
+def find_active(
+    session: Session,
+    kind: str,
+    payload: dict[str, Any],
+    *,
+    statuses: tuple[str, ...] = ACTIVE_STATUSES,
+) -> Job | None:
+    """Return a job of this kind, in one of `statuses`, whose payload contains `payload`."""
     return session.scalars(
         select(Job)
-        .where(Job.kind == kind, Job.status.in_(ACTIVE_STATUSES), Job.payload.contains(payload))
+        .where(Job.kind == kind, Job.status.in_(statuses), Job.payload.contains(payload))
         .order_by(Job.id)
         .limit(1)
     ).first()

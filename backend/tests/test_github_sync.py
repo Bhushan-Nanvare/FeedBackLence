@@ -2,11 +2,10 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import FeedbackItem, Source, Workspace
+from app.models import FeedbackItem, Job, Source
 from app.sources.github_client import GithubIssue
 from app.sources.github_sync import CURSOR_OVERLAP, sync_github_source
 
@@ -57,19 +56,6 @@ class FakeClient:
         for page in self.pages:
             self.pages_served += 1
             yield page
-
-
-@pytest.fixture
-def source(db: Session, workspace: Workspace) -> Source:
-    source = Source(
-        workspace_id=workspace.id,
-        kind="github",
-        name="acme/app",
-        config={"repo": "acme/app", "backfill_days": 7, "max_items": 100},
-    )
-    db.add(source)
-    db.commit()
-    return source
 
 
 def stored_items(db: Session) -> dict[str, FeedbackItem]:
@@ -153,6 +139,21 @@ def test_incremental_sync_is_idempotent_and_detects_changes(db: Session, source:
     assert items["1"].body_clean == "The editor freezes after saving."
     assert items["2"].labels == ["bug"]
     assert db.scalar(select(func.count()).select_from(FeedbackItem)) == 2
+
+
+def test_sync_queues_tagging_only_when_items_change(db: Session, source: Source) -> None:
+    sync_github_source(db, source, FakeClient([[make_issue(1, days_ago(1))]]), now=NOW)
+
+    jobs = list(db.scalars(select(Job).where(Job.kind == "tag_items")))
+    assert [job.payload for job in jobs] == [{"workspace_id": source.workspace_id}]
+
+    jobs[0].status = "done"
+    db.commit()
+    later = NOW + timedelta(hours=1)
+    unchanged = make_issue(1, days_ago(1), updated=later)
+    sync_github_source(db, source, FakeClient([[unchanged]]), now=later)
+
+    assert db.scalar(select(func.count()).select_from(Job).where(Job.status == "queued")) == 0
 
 
 def test_stores_cleaned_text_and_pseudonymous_author(db: Session, source: Source) -> None:

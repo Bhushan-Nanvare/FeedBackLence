@@ -8,10 +8,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.ai.tagging import TAG_ITEMS_JOB, run_tag_items_job
 from app.config import get_settings
 from app.db import SessionLocal
+from app.errors import PermanentJobError, RateLimitedError
 from app.jobs import queue
-from app.sources.github_client import RateLimitedError
 from app.sources.github_sync import GITHUB_SYNC_JOB, run_github_sync_job
 
 logger = logging.getLogger("app.worker")
@@ -20,6 +21,7 @@ JobHandler = Callable[[Session, dict[str, Any]], None]
 
 HANDLERS: dict[str, JobHandler] = {
     GITHUB_SYNC_JOB: run_github_sync_job,
+    TAG_ITEMS_JOB: run_tag_items_job,
 }
 
 
@@ -42,6 +44,10 @@ def run_next_job(handlers: dict[str, JobHandler] = HANDLERS) -> bool:
             session.rollback()
             logger.warning("job %s postponed: %s", job.id, exc)
             queue.postpone(session, job, until=exc.reset_at, reason=str(exc))
+        except PermanentJobError as exc:
+            session.rollback()
+            logger.error("job %s failed permanently: %s", job.id, exc)
+            queue.mark_failed(session, job, str(exc), retry=False)
         except Exception as exc:
             session.rollback()
             logger.exception("job %s failed", job.id)

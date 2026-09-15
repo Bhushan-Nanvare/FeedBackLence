@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.ai.tagging import request_tagging
 from app.config import get_settings
 from app.models import FeedbackItem, Source
 from app.processing.clean import clean_body
@@ -105,6 +106,8 @@ def sync_github_source(
         "cursor": (now - CURSOR_OVERLAP).isoformat(),
     }
     source.last_synced_at = now
+    if stats.created or stats.updated:
+        request_tagging(session, source.workspace_id)
     session.commit()
     return stats
 

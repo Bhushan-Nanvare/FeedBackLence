@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     github_token: str | None = None
     worker_poll_interval_seconds: float = 2.0
 
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.5-flash-lite"
+    # Free-tier limits differ per account (see AI Studio); stay under yours to avoid 429s.
+    gemini_requests_per_minute: int = 10
+    tagging_batch_size: int = 15
+    tagging_max_items_per_job: int = 300
+
 
 @lru_cache
 def get_settings() -> Settings:

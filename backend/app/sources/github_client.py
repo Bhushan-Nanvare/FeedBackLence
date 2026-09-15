@@ -7,17 +7,11 @@ from typing import Any, Literal
 
 import httpx
 
+from app.errors import RateLimitedError
+
 API_URL = "https://api.github.com"
 PAGE_SIZE = 100
 MAINTAINER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
-
-
-class RateLimitedError(Exception):
-    """GitHub refused the request until `reset_at`."""
-
-    def __init__(self, reset_at: datetime) -> None:
-        super().__init__(f"GitHub rate limit reached; retry after {reset_at.isoformat()}")
-        self.reset_at = reset_at
 
 
 @dataclass(frozen=True)
@@ -111,7 +105,7 @@ class GithubClient:
         if response.status_code in (403, 429):
             reset_at = _rate_limit_reset(response)
             if reset_at is not None:
-                raise RateLimitedError(reset_at)
+                raise RateLimitedError("GitHub", reset_at)
         response.raise_for_status()
         return response
 

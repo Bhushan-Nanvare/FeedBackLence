@@ -73,6 +73,23 @@ The first sync imports issues created in the last `backfill_days` (up to `max_it
 
 Without a token GitHub allows 60 API requests per hour. Set `GITHUB_TOKEN` in `.env` to raise that to 5,000.
 
+## AI tagging
+
+After each sync the worker labels new and changed issues with a **type** (bug, feature request, question, praise, other), **product area**, **sentiment**, **urgency** and a **one-line summary**. It uses Gemini with a strict JSON schema, so the model can only answer with known labels.
+
+1. Add `GEMINI_API_KEY` to `.env` (a free key from [Google AI Studio](https://aistudio.google.com/apikey)).
+2. Optionally adjust the product areas with `PUT /workspaces/demo/product-areas`. The demo workspace starts with areas for VS Code.
+3. Tagging is queued automatically after a sync, or manually with `POST /workspaces/demo/tagging/run`.
+4. Check progress with `GET /workspaces/demo/tagging/status`.
+
+How it keeps cost and mistakes down:
+
+- Issues written by maintainers are internal tasks, so they are skipped.
+- Items go to the model in batches (15 by default), and requests are spaced to stay under `GEMINI_REQUESTS_PER_MINUTE`. When Gemini says to slow down, the job waits for the time it asks for.
+- Unchanged items are never tagged twice, and tags a person has reviewed are never overwritten.
+- Feedback text is treated as untrusted data in the prompt, and every result is validated before it is saved.
+- Every model call is recorded in `ai_calls` with its token usage and latency.
+
 ## Checks
 
 Backend:

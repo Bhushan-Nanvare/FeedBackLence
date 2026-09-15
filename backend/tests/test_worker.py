@@ -4,9 +4,9 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.errors import PermanentJobError, RateLimitedError
 from app.jobs import queue
 from app.models import Job
-from app.sources.github_client import RateLimitedError
 from app.worker import run_next_job
 
 
@@ -50,7 +50,7 @@ def test_rate_limited_job_is_postponed_without_using_an_attempt(db: Session) -> 
     reset_at = db.scalar(select(func.now())) + timedelta(minutes=30)
 
     def limited(session: Session, payload: dict[str, Any]) -> None:
-        raise RateLimitedError(reset_at)
+        raise RateLimitedError("Test API", reset_at)
 
     job = queue.enqueue(db, "limited", {})
     db.commit()
@@ -59,6 +59,19 @@ def test_rate_limited_job_is_postponed_without_using_an_attempt(db: Session) -> 
 
     stored = stored_job(db, job.id)
     assert (stored.status, stored.attempts, stored.run_after) == ("queued", 0, reset_at)
+
+
+def test_permanent_error_fails_the_job_without_retry(db: Session) -> None:
+    def misconfigured(session: Session, payload: dict[str, Any]) -> None:
+        raise PermanentJobError("API key missing")
+
+    job = queue.enqueue(db, "misconfigured", {})
+    db.commit()
+
+    run_next_job({"misconfigured": misconfigured})
+
+    stored = stored_job(db, job.id)
+    assert (stored.status, stored.attempts, stored.last_error) == ("failed", 1, "API key missing")
 
 
 def test_unknown_job_kind_fails_without_retry(db: Session) -> None:

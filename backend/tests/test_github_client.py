@@ -4,7 +4,8 @@ from typing import Any
 import httpx
 import pytest
 
-from app.sources.github_client import GithubClient, RateLimitedError
+from app.errors import RateLimitedError
+from app.sources.github_client import GithubClient
 
 
 def api_issue(number: int, **overrides: Any) -> dict[str, Any]:
