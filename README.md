@@ -90,6 +90,17 @@ How it keeps cost and mistakes down:
 - Feedback text is treated as untrusted data in the prompt, and every result is validated before it is saved.
 - Every model call is recorded in `ai_calls` with its token usage and latency.
 
+## Feedback inbox
+
+Open http://localhost:3000/workspaces/demo/inbox (or follow the link from the home page).
+
+- Filter by type, product area, urgency, sentiment or state, show only untagged items, search titles and text, and sort by newest, oldest or most reactions.
+- Maintainers' own issues are hidden unless you ask for them.
+- Each card links to the original issue and shows its labels and one-line summary.
+- The **Correct** dropdowns fix a wrong label. Corrected items are marked, are never re-labelled by AI, and become the checked set used later to measure tagging accuracy.
+
+Endpoints: `GET /workspaces/{slug}/items` (filters, paging), `GET /workspaces/{slug}/items/{id}`, `PATCH /workspaces/{slug}/items/{id}/tag`.
+
 ## Checks
 
 Backend:

@@ -16,7 +16,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -110,6 +110,9 @@ class FeedbackItem(TimestampMixin, Base):
     reactions_count: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     external_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     external_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    tag: Mapped["ItemTag | None"] = relationship(
+        back_populates="item", lazy="selectin", cascade="all, delete-orphan"
+    )
 
 
 class ProductArea(TimestampMixin, Base):
@@ -153,6 +156,7 @@ class ItemTag(TimestampMixin, Base):
     model: Mapped[str] = mapped_column(String(100))
     prompt_version: Mapped[str] = mapped_column(String(20))
     reviewed_by_human: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    item: Mapped["FeedbackItem"] = relationship(back_populates="tag")
 
 
 class AiCall(Base):

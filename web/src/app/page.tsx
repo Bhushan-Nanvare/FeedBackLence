@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 
 import { getHealth } from "@/lib/api";
@@ -38,6 +39,12 @@ export default async function Home() {
           Collects user feedback from everywhere, groups it into themes, spots problems that are
           growing and turns the biggest ones into tickets backed by real quotes.
         </p>
+        <Link
+          href="/workspaces/demo/inbox"
+          className="w-fit rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          Open the demo inbox
+        </Link>
       </header>
 
       <section
