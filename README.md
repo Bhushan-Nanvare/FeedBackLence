@@ -101,6 +101,23 @@ Open http://localhost:3000/workspaces/demo/inbox (or follow the link from the ho
 
 Endpoints: `GET /workspaces/{slug}/items` (filters, paging), `GET /workspaces/{slug}/items/{id}`, `PATCH /workspaces/{slug}/items/{id}/tag`.
 
+## Measuring tagging accuracy
+
+AI labels are only worth trusting if we know how often they are right, so FeedbackLens keeps a **checked set** of correct answers and scores the AI against it.
+
+```bash
+cd backend
+uv run python -m app.evals build --workspace demo --limit 1500
+uv run python -m app.evals score --workspace demo
+```
+
+- **Drafts come free from the repository's own labels.** An issue labelled `bug` and `terminal` becomes "type: bug, area: terminal". On 21 days of VS Code issues this drafts roughly 190 answers.
+- Labels that only describe how an issue was handled, such as `invalid` or `*duplicate`, are ignored, because they don't say what kind of feedback it is.
+- **Corrections you make in the inbox replace the drafts** and are never overwritten by a later draft run.
+- **Items you corrected are left out of the score**, since a corrected tag matches the answer by definition and would flatter the model.
+- The report shows accuracy, precision, recall and F1 for each label, macro F1, and the most common mistakes.
+- `--json` saves the report, `--save-baseline` stores it as the reference, and `--baseline evals/baseline.json --max-drop 3` fails when a score falls more than 3 points. That is how this will run in CI in Phase 5; today it runs locally, because scoring needs a database with real tags.
+
 ## Checks
 
 Backend:

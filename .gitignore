@@ -11,6 +11,9 @@ __pycache__/
 .env.*
 !.env.example
 
+# Evaluation output (saved baselines are committed, one-off reports are not)
+evals/latest.json
+
 # Editors / OS
 .vscode/
 .idea/

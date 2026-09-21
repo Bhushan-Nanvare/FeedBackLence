@@ -22,6 +22,7 @@ from app.db import Base
 
 SOURCE_KINDS = ("github", "csv", "widget")
 JOB_STATUSES = ("queued", "running", "done", "failed")
+EVAL_LABEL_SOURCES = ("github_label", "human")
 
 TagType = Literal["bug", "feature_request", "question", "praise", "other"]
 Sentiment = Literal["negative", "neutral", "positive"]
@@ -157,6 +158,28 @@ class ItemTag(TimestampMixin, Base):
     prompt_version: Mapped[str] = mapped_column(String(20))
     reviewed_by_human: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     item: Mapped["FeedbackItem"] = relationship(back_populates="tag")
+
+
+class EvalLabel(TimestampMixin, Base):
+    """The label we treat as correct for an item, used to measure tagging accuracy.
+
+    Drafts come from the source's own labels (e.g. GitHub's "bug"); a person reviewing an
+    item in the inbox replaces the draft with a checked label.
+    """
+
+    __tablename__ = "eval_labels"
+    __table_args__ = (
+        CheckConstraint(_one_of("source", EVAL_LABEL_SOURCES), name="source"),
+        CheckConstraint(_one_of("expected_type", TAG_TYPES), name="expected_type"),
+    )
+
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("feedback_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    expected_type: Mapped[str | None] = mapped_column(String(20))
+    expected_area: Mapped[str | None] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(20))
 
 
 class AiCall(Base):

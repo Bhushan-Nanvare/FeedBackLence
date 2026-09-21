@@ -13,6 +13,7 @@ from app.api.schemas import (
     ItemTagRead,
     ItemTagUpdate,
 )
+from app.evals.dataset import record_checked_label
 from app.models import FeedbackItem, ItemTag, ProductArea, Workspace
 
 router = APIRouter(prefix="/workspaces/{slug}/items", tags=["items"])
@@ -83,6 +84,14 @@ def correct_tag(
     for field, value in changes.model_dump(exclude_none=True).items():
         setattr(tag, field, value)
     tag.reviewed_by_human = True
+    # The correction is also the checked answer used to score tagging accuracy.
+    record_checked_label(
+        session,
+        item_id=item.id,
+        workspace_id=workspace.id,
+        expected_type=changes.type,
+        expected_area=changes.area,
+    )
     session.commit()
     return tag
 

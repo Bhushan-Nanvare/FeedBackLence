@@ -3,10 +3,11 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.main import app
-from app.models import FeedbackItem, ItemTag, ProductArea, Workspace
+from app.models import EvalLabel, FeedbackItem, ItemTag, ProductArea, Workspace
 
 MakeItem = Callable[..., FeedbackItem]
 
@@ -177,6 +178,22 @@ def test_correcting_an_untagged_item_creates_the_tag(
     body = response.json()
     assert (body["type"], body["area"], body["reviewed_by_human"]) == ("praise", "editor", True)
     assert listed(client)["items"][0]["tag"]["type"] == "praise"
+
+
+def test_correction_becomes_a_checked_label(
+    client: TestClient, db: Session, make_item: MakeItem, areas: None
+) -> None:
+    item = make_item(1)
+
+    client.patch(f"/workspaces/test/items/{item.id}/tag", json={"type": "bug", "area": "editor"})
+
+    label = db.scalars(select(EvalLabel)).one()
+    assert (label.item_id, label.expected_type, label.expected_area, label.source) == (
+        item.id,
+        "bug",
+        "editor",
+        "human",
+    )
 
 
 @pytest.mark.parametrize(
