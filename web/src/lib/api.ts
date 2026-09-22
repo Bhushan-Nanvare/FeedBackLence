@@ -45,6 +45,34 @@ export type ProductArea = {
 
 export type TagCorrection = Partial<Pick<ItemTag, "type" | "area" | "sentiment" | "urgency">>;
 
+export type ThemeWeek = {
+  week_start: string;
+  item_count: number;
+};
+
+export type Theme = {
+  id: number;
+  name: string;
+  summary: string;
+  status: string;
+  item_count: number;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  renamed_by_human: boolean;
+  weeks: ThemeWeek[];
+  last_week_count: number;
+  growth: number | null;
+};
+
+export type ThemeList = {
+  total: number;
+  themes: Theme[];
+};
+
+export type ThemeDetail = Theme & {
+  items: FeedbackItem[];
+};
+
 /** Returns the API health report, or null when the API itself is unreachable. */
 export async function getHealth(): Promise<Health | null> {
   try {
@@ -70,6 +98,26 @@ export async function correctItemTag(
   changes: TagCorrection,
 ): Promise<ItemTag> {
   return request<ItemTag>(`/workspaces/${slug}/items/${itemId}/tag`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+}
+
+export async function getThemes(slug: string, params: URLSearchParams): Promise<ThemeList> {
+  return request<ThemeList>(`/workspaces/${slug}/themes?${params.toString()}`);
+}
+
+export async function getTheme(slug: string, themeId: number): Promise<ThemeDetail> {
+  return request<ThemeDetail>(`/workspaces/${slug}/themes/${themeId}`);
+}
+
+export async function updateTheme(
+  slug: string,
+  themeId: number,
+  changes: { name?: string; status?: string },
+): Promise<Theme> {
+  return request<Theme>(`/workspaces/${slug}/themes/${themeId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(changes),

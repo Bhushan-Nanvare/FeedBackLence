@@ -1,5 +1,7 @@
 from logging.config import fileConfig
+from typing import Any
 
+import pgvector.sqlalchemy
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
@@ -19,6 +21,14 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def render_item(item_type: str, obj: Any, autogen_context: Any) -> str | bool:
+    """Render vector columns with the import they need; leave everything else to Alembic."""
+    if item_type == "type" and isinstance(obj, pgvector.sqlalchemy.Vector):
+        autogen_context.imports.add("import pgvector.sqlalchemy")
+        return f"pgvector.sqlalchemy.Vector({obj.dim})"
+    return False
+
+
 def run_migrations_offline() -> None:
     """Emit migration SQL to stdout without connecting to a database."""
     context.configure(
@@ -26,6 +36,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_item=render_item,
     )
 
     with context.begin_transaction():
@@ -42,7 +53,9 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata, render_item=render_item
+        )
 
         with context.begin_transaction():
             context.run_migrations()

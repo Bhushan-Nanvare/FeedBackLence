@@ -1,9 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, get_args
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -18,11 +20,13 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.ai.embeddings import EMBEDDING_DIMENSIONS
 from app.db import Base
 
 SOURCE_KINDS = ("github", "csv", "widget")
 JOB_STATUSES = ("queued", "running", "done", "failed")
 EVAL_LABEL_SOURCES = ("github_label", "human")
+THEME_STATUSES = ("open", "ignored")
 
 TagType = Literal["bug", "feature_request", "question", "praise", "other"]
 Sentiment = Literal["negative", "neutral", "positive"]
@@ -158,6 +162,80 @@ class ItemTag(TimestampMixin, Base):
     prompt_version: Mapped[str] = mapped_column(String(20))
     reviewed_by_human: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     item: Mapped["FeedbackItem"] = relationship(back_populates="tag")
+
+
+class ItemEmbedding(TimestampMixin, Base):
+    """The vector form of one item's text, used to find similar feedback."""
+
+    __tablename__ = "item_embeddings"
+    __table_args__ = (
+        Index(
+            "ix_item_embeddings_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("feedback_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
+    model: Mapped[str] = mapped_column(String(100))
+    # The item's content_hash when it was embedded; a mismatch means the text changed since.
+    content_hash: Mapped[str] = mapped_column(String(64))
+
+
+class Theme(TimestampMixin, Base):
+    """A group of feedback items about the same thing."""
+
+    __tablename__ = "themes"
+    __table_args__ = (
+        CheckConstraint(_one_of("status", THEME_STATUSES), name="status"),
+        Index("ix_themes_workspace_id_item_count", "workspace_id", "item_count"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default=text("'open'"))
+    # The middle of the group: new items close to this one belong here.
+    centroid: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
+    item_count: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Which model named it, or "medoid" when the name is borrowed from its most typical item.
+    name_model: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    renamed_by_human: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+
+
+class ThemeItem(Base):
+    """Which theme an item belongs to. An item belongs to at most one."""
+
+    __tablename__ = "theme_items"
+
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("feedback_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    theme_id: Mapped[int] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"), index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    # How close this item is to the theme's centre, from 0 to 1.
+    similarity: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ThemeWeeklyStat(Base):
+    """How many reports a theme received each week, for trend charts and alerts."""
+
+    __tablename__ = "theme_weekly_stats"
+
+    theme_id: Mapped[int] = mapped_column(
+        ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True
+    )
+    week_start: Mapped[date] = mapped_column(Date, primary_key=True)
+    item_count: Mapped[int] = mapped_column(default=0, server_default=text("0"))
 
 
 class EvalLabel(TimestampMixin, Base):

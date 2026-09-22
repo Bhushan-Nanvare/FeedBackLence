@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +23,30 @@ class Settings(BaseSettings):
     gemini_requests_per_minute: int = 10
     tagging_batch_size: int = 15
     tagging_max_items_per_job: int = 300
+
+    # "local" runs a small model on this machine (no key, no quota); "gemini" calls the API.
+    embedding_provider: Literal["local", "gemini"] = "local"
+    local_embedding_model: str = "BAAI/bge-small-en-v1.5"
+    gemini_embedding_model: str = "gemini-embedding-001"
+    embedding_batch_size: int = 32
+    embedding_max_items_per_job: int = 1000
+
+    # Fewer reports than this stay unsorted instead of becoming a theme.
+    cluster_min_size: int = 5
+    # How crowded a neighbourhood must be to start a theme. Lower groups more, but looser.
+    cluster_min_samples: int = 2
+    # Vectors are squeezed to this many dimensions before grouping, which finds far more
+    # groups at almost the same tightness (measured on VS Code issues: 43% vs 13% grouped).
+    cluster_pca_dimensions: int = 50
+    # A group whose members sit further than this from its centre is scattered rather than
+    # a real theme, so its items stay unsorted instead of forming a "miscellaneous" group.
+    cluster_min_coherence: float = 0.6
+    # How much of the smaller side a new cluster and an old theme must share to count as
+    # the same theme. Comparing against the smaller side matters because themes grow by
+    # attaching leftover reports, so the stored theme is bigger than the cluster it came from.
+    theme_match_min_overlap: float = 0.5
+    # How close a leftover item must be to a theme's centre to join it.
+    theme_assign_min_similarity: float = 0.8
 
 
 @lru_cache

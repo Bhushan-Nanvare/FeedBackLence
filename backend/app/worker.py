@@ -8,12 +8,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.ai.embedding import EMBED_ITEMS_JOB, run_embed_items_job
 from app.ai.tagging import TAG_ITEMS_JOB, run_tag_items_job
 from app.config import get_settings
 from app.db import SessionLocal
 from app.errors import PermanentJobError, RateLimitedError
 from app.jobs import queue
 from app.sources.github_sync import GITHUB_SYNC_JOB, run_github_sync_job
+from app.themes.clustering import CLUSTER_ITEMS_JOB, run_cluster_items_job
 
 logger = logging.getLogger("app.worker")
 
@@ -22,6 +24,8 @@ JobHandler = Callable[[Session, dict[str, Any]], None]
 HANDLERS: dict[str, JobHandler] = {
     GITHUB_SYNC_JOB: run_github_sync_job,
     TAG_ITEMS_JOB: run_tag_items_job,
+    EMBED_ITEMS_JOB: run_embed_items_job,
+    CLUSTER_ITEMS_JOB: run_cluster_items_job,
 }
 
 

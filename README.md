@@ -101,6 +101,25 @@ Open http://localhost:3000/workspaces/demo/inbox (or follow the link from the ho
 
 Endpoints: `GET /workspaces/{slug}/items` (filters, paging), `GET /workspaces/{slug}/items/{id}`, `PATCH /workspaces/{slug}/items/{id}/tag`.
 
+## Themes: grouping similar feedback
+
+Once items are imported, the worker turns each one into a vector and groups similar ones into **themes**, so "the terminal crashes when I split it" reported 40 different ways becomes one row.
+
+```bash
+cd backend
+uv sync --extra local-embeddings   # once: installs the local embedding model runner
+uv run python -m app.worker        # embeds new items, then groups them
+```
+
+- **Vectors** capture what a report is about. By default a small model runs on your machine (`EMBEDDING_PROVIDER=local`): no key, no quota, no cost. Set `EMBEDDING_PROVIDER=gemini` to use the API instead; both produce the same size, so you can switch without touching the database.
+- **Grouping** uses HDBSCAN, which leaves one-off reports out instead of forcing everything into a group. A theme needs at least `CLUSTER_MIN_SIZE` reports (5 by default).
+- **Themes keep their identity across runs.** Each run matches its groups to the previous ones by the reports they share, so a theme's id, and the name you gave it, survive as new feedback arrives.
+- **Names** start as the title of the theme's most typical report. Rename a theme in the dashboard and later runs keep your name.
+- Leftover reports that sit very close to a theme's centre are attached to it.
+- Weekly counts per theme are stored, which drives the trend chart now and alerts in a later phase.
+
+Dashboard: http://localhost:3000/workspaces/demo/themes. Endpoints: `GET /workspaces/{slug}/themes` (sort by size, growth or recency), `GET .../themes/{id}`, `PATCH .../themes/{id}` (rename or hide), `POST .../themes/recluster`.
+
 ## Measuring tagging accuracy
 
 AI labels are only worth trusting if we know how often they are right, so FeedbackLens keeps a **checked set** of correct answers and scores the AI against it.

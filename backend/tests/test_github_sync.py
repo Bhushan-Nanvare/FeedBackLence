@@ -141,13 +141,15 @@ def test_incremental_sync_is_idempotent_and_detects_changes(db: Session, source:
     assert db.scalar(select(func.count()).select_from(FeedbackItem)) == 2
 
 
-def test_sync_queues_tagging_only_when_items_change(db: Session, source: Source) -> None:
+def test_sync_queues_follow_up_work_only_when_items_change(db: Session, source: Source) -> None:
     sync_github_source(db, source, FakeClient([[make_issue(1, days_ago(1))]]), now=NOW)
 
-    jobs = list(db.scalars(select(Job).where(Job.kind == "tag_items")))
-    assert [job.payload for job in jobs] == [{"workspace_id": source.workspace_id}]
+    jobs = list(db.scalars(select(Job)))
+    assert sorted(job.kind for job in jobs) == ["embed_items", "tag_items"]
+    assert {job.payload["workspace_id"] for job in jobs} == {source.workspace_id}
 
-    jobs[0].status = "done"
+    for job in jobs:
+        job.status = "done"
     db.commit()
     later = NOW + timedelta(hours=1)
     unchanged = make_issue(1, days_ago(1), updated=later)

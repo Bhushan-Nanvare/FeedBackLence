@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -123,6 +123,48 @@ class ItemTagUpdate(BaseModel):
     def at_least_one_change(self) -> "ItemTagUpdate":
         if not self.model_dump(exclude_none=True):
             raise ValueError("Give at least one of type, area, sentiment or urgency")
+        return self
+
+
+class ThemeWeekRead(BaseModel):
+    week_start: date
+    item_count: int
+
+
+class ThemeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    summary: str
+    status: str
+    item_count: int
+    first_seen_at: datetime | None
+    last_seen_at: datetime | None
+    renamed_by_human: bool
+    weeks: list[ThemeWeekRead] = []
+    last_week_count: int = 0
+    # The latest week compared with the weeks before it; 2.0 means twice as many as usual.
+    growth: float | None = None
+
+
+class ThemeDetail(ThemeRead):
+    items: list[FeedbackItemRead] = []
+
+
+class ThemeList(BaseModel):
+    total: int
+    themes: list[ThemeRead]
+
+
+class ThemeUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    status: Literal["open", "ignored"] | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_change(self) -> "ThemeUpdate":
+        if not self.model_dump(exclude_none=True):
+            raise ValueError("Give a name or a status")
         return self
 
 

@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.ai.embedding import request_embedding
 from app.ai.tagging import request_tagging
 from app.config import get_settings
 from app.models import FeedbackItem, Source
@@ -108,6 +109,7 @@ def sync_github_source(
     source.last_synced_at = now
     if stats.created or stats.updated:
         request_tagging(session, source.workspace_id)
+        request_embedding(session, source.workspace_id)
     session.commit()
     return stats
 
