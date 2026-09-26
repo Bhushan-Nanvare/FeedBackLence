@@ -73,6 +73,30 @@ export type ThemeDetail = Theme & {
   items: FeedbackItem[];
 };
 
+export type CitedItem = {
+  number: number;
+  item: FeedbackItem;
+};
+
+export type Answer = {
+  question_id: number | null;
+  question: string;
+  answer: string;
+  enough_evidence: boolean;
+  considered_count: number;
+  sources: CitedItem[];
+  dropped_citations: number[];
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 /** Returns the API health report, or null when the API itself is unreachable. */
 export async function getHealth(): Promise<Health | null> {
   try {
@@ -124,10 +148,43 @@ export async function updateTheme(
   });
 }
 
+export async function askQuestion(slug: string, question: string): Promise<Answer> {
+  return request<Answer>(`/workspaces/${slug}/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+}
+
+export async function rateAnswer(
+  slug: string,
+  questionId: number,
+  helpful: boolean,
+): Promise<void> {
+  await request(`/workspaces/${slug}/questions/${questionId}/rating`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ helpful }),
+  });
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init });
   if (!response.ok) {
-    throw new Error(`Request to ${path} failed with ${response.status}`);
+    throw new ApiError(await explain(response), response.status);
   }
   return (await response.json()) as T;
+}
+
+/** Use the API's own explanation when it sends one, so the page can show what is wrong. */
+async function explain(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+  } catch {
+    // Fall through to the status text.
+  }
+  return `Request failed with ${response.status}`;
 }

@@ -120,6 +120,20 @@ uv run python -m app.worker        # embeds new items, then groups them
 
 Dashboard: http://localhost:3000/workspaces/demo/themes. Endpoints: `GET /workspaces/{slug}/themes` (sort by size, growth or recency), `GET .../themes/{id}`, `PATCH .../themes/{id}` (rename or hide), `POST .../themes/recluster`.
 
+## Ask your feedback
+
+Ask a question in plain English at http://localhost:3000/workspaces/demo/ask and get an answer built only from real reports, with a numbered link to each one.
+
+- **Two searches run together.** One matches words (good for exact terms and error codes), one matches meaning (good when users describe the same problem in different words). Their rankings are merged with reciprocal rank fusion, which needs no way to compare the two kinds of score. Asking "chat is too slow to respond" on VS Code feedback finds nothing by words and five relevant reports by meaning.
+- **The model only sees real reports.** It receives a numbered list and must point at the ones it used.
+- **Citations are checked afterwards.** A number that doesn't match a report it was shown is removed from the answer, and an answer left with no citation is reported as unsupported rather than believed.
+- **Nothing to answer from?** It says so instead of inventing something, and no model call is made at all.
+- Every question, answer and cited report is saved, along with a thumbs up or down, which is the signal for improving the prompt later.
+
+Word search alone works without any AI key, so `GET /workspaces/{slug}/search?q=...` is useful immediately. Answering needs `GEMINI_API_KEY`; without it the page says exactly that.
+
+Endpoints: `GET /workspaces/{slug}/search`, `POST /workspaces/{slug}/ask`, `POST /workspaces/{slug}/questions/{id}/rating`.
+
 ## Measuring tagging accuracy
 
 AI labels are only worth trusting if we know how often they are right, so FeedbackLens keeps a **checked set** of correct answers and scores the AI against it.

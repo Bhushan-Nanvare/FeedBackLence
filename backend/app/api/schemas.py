@@ -126,6 +126,74 @@ class ItemTagUpdate(BaseModel):
         return self
 
 
+class SearchQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    q: str = Field(min_length=1, max_length=300, examples=["terminal crashes when splitting"])
+    type: TagType | None = None
+    area: str | None = Field(default=None, max_length=64)
+    state: Literal["open", "closed"] | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    include_maintainer: bool = False
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+class SearchHitRead(BaseModel):
+    item: FeedbackItemRead
+    score: float
+    # "words", "meaning", or both: which search found this item.
+    matched_by: list[str]
+
+
+class SearchResults(BaseModel):
+    question: str
+    searched_by_meaning: bool
+    hits: list[SearchHitRead]
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=300, examples=["What do users hate about chat?"])
+    snippets: int = Field(default=8, ge=1, le=20)
+    type: TagType | None = None
+    area: str | None = Field(default=None, max_length=64)
+    state: Literal["open", "closed"] | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    include_maintainer: bool = False
+
+
+class CitedItemRead(BaseModel):
+    number: int
+    item: FeedbackItemRead
+
+
+class AnswerRead(BaseModel):
+    question_id: int | None
+    question: str
+    answer: str
+    enough_evidence: bool
+    considered_count: int
+    sources: list[CitedItemRead]
+    # Citation numbers the model made up, which were removed before you saw the answer.
+    dropped_citations: list[int]
+
+
+class QuestionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    question: str
+    answer: str
+    enough_evidence: bool
+    helpful: bool | None
+    created_at: datetime
+
+
+class RatingUpdate(BaseModel):
+    helpful: bool
+
+
 class ThemeWeekRead(BaseModel):
     week_start: date
     item_count: int

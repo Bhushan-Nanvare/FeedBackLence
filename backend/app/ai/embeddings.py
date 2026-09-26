@@ -6,6 +6,7 @@ database: a small model running on this machine, or Gemini's embedding API.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Protocol
 
 from app.config import Settings, get_settings
@@ -51,6 +52,12 @@ def get_embedder(settings: Settings | None = None) -> Embedder:
         model=settings.gemini_embedding_model,
         requests_per_minute=settings.gemini_requests_per_minute,
     )
+
+
+@lru_cache(maxsize=1)
+def get_shared_embedder() -> Embedder:
+    """One embedder per process: the local model is slow to load, so it is kept in memory."""
+    return get_embedder()
 
 
 def check_dimensions(vectors: Sequence[Sequence[float]], model: str) -> None:

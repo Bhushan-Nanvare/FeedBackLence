@@ -5,6 +5,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Computed,
     Date,
     DateTime,
     Float,
@@ -17,7 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.ai.embeddings import EMBEDDING_DIMENSIONS
@@ -92,6 +93,7 @@ class FeedbackItem(TimestampMixin, Base):
             "workspace_id",
             "external_created_at",
         ),
+        Index("ix_feedback_items_search_vector", "search_vector", postgresql_using="gin"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -115,6 +117,15 @@ class FeedbackItem(TimestampMixin, Base):
     reactions_count: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     external_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     external_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Kept up to date by Postgres. Title words count for more than body words.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "setweight(to_tsvector('english', title), 'A') || "
+            "setweight(to_tsvector('english', body_clean), 'B')",
+            persisted=True,
+        ),
+    )
     tag: Mapped["ItemTag | None"] = relationship(
         back_populates="item", lazy="selectin", cascade="all, delete-orphan"
     )
@@ -258,6 +269,29 @@ class EvalLabel(TimestampMixin, Base):
     expected_type: Mapped[str | None] = mapped_column(String(20))
     expected_area: Mapped[str | None] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(20))
+
+
+class Question(Base):
+    """A question asked about the feedback, with the answer and the reports it cited."""
+
+    __tablename__ = "questions"
+    __table_args__ = (Index("ix_questions_workspace_id_created_at", "workspace_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    # The reports the answer pointed at, and how many it was shown.
+    cited_item_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(BigInteger), default=list, server_default=text("'{}'")
+    )
+    considered_count: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    enough_evidence: Mapped[bool] = mapped_column(default=True, server_default=text("true"))
+    model: Mapped[str] = mapped_column(String(100))
+    prompt_version: Mapped[str] = mapped_column(String(20))
+    # Set when a reader says whether the answer helped.
+    helpful: Mapped[bool | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class AiCall(Base):
