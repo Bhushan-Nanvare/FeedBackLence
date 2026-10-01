@@ -15,6 +15,7 @@ from sklearn.decomposition import PCA
 from sqlalchemy import Date, cast, delete, func, insert, select, update
 from sqlalchemy.orm import Session
 
+from app.alerts.detection import request_trend_check
 from app.config import get_settings
 from app.jobs import queue
 from app.models import FeedbackItem, ItemEmbedding, Job, Theme, ThemeItem, ThemeWeeklyStat
@@ -133,6 +134,8 @@ def cluster_workspace(
         )
         or 0
     )
+    # Themes just changed, so it is worth looking for ones that are growing.
+    request_trend_check(session, workspace_id)
     session.commit()
     return stats
 

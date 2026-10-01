@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { getThemes, type Theme } from "@/lib/api";
+import { getAlerts, getThemes, type Alert, type Theme } from "@/lib/api";
 
 import { SortLinks } from "./sort-links";
 import { WeeklyBars } from "./weekly-bars";
@@ -15,9 +15,14 @@ export default async function ThemesPage(props: PageProps<"/workspaces/[slug]/th
   const sort: Sort = SORTS.includes(requested as Sort) ? (requested as Sort) : "size";
 
   let themes: Theme[] | null = null;
+  let alerts: Alert[] = [];
   try {
-    const result = await getThemes(slug, new URLSearchParams({ sort, limit: "50" }));
+    const [result, raised] = await Promise.all([
+      getThemes(slug, new URLSearchParams({ sort, limit: "50" })),
+      getAlerts(slug),
+    ]);
     themes = result.themes;
+    alerts = raised;
   } catch {
     themes = null;
   }
@@ -49,6 +54,7 @@ export default async function ThemesPage(props: PageProps<"/workspaces/[slug]/th
         </p>
       ) : (
         <>
+          {alerts.length > 0 && <RisingNow slug={slug} alerts={alerts} />}
           <SortLinks slug={slug} sort={sort} />
           <div className="flex flex-col gap-3">
             {themes.map((theme) => (
@@ -58,6 +64,31 @@ export default async function ThemesPage(props: PageProps<"/workspaces/[slug]/th
         </>
       )}
     </main>
+  );
+}
+
+function RisingNow({ slug, alerts }: { slug: string; alerts: Alert[] }) {
+  return (
+    <section className="flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+      <h2 className="text-sm font-medium uppercase tracking-wide text-amber-800 dark:text-amber-200">
+        Rising now
+      </h2>
+      {alerts.map((alert) => (
+        <p key={alert.id} className="text-sm">
+          <Link
+            href={`/workspaces/${slug}/themes/${alert.theme_id}`}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {alert.theme_name}
+          </Link>{" "}
+          <span className="text-zinc-600 dark:text-zinc-400">
+            — {alert.item_count} reports in the week of {alert.week_start},{" "}
+            {alert.ratio.toFixed(1)}× the usual {alert.baseline.toFixed(1)} a week
+            {alert.status === "skipped" && " (no alert channel set up)"}
+          </span>
+        </p>
+      ))}
+    </section>
   );
 }
 

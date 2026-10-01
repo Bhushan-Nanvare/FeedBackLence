@@ -120,6 +120,19 @@ uv run python -m app.worker        # embeds new items, then groups them
 
 Dashboard: http://localhost:3000/workspaces/demo/themes. Endpoints: `GET /workspaces/{slug}/themes` (sort by size, growth or recency), `GET .../themes/{id}`, `PATCH .../themes/{id}` (rename or hide), `POST .../themes/recluster`.
 
+## Alerts for themes that are growing
+
+A theme that suddenly takes off is the thing a team wants to hear about, so FeedbackLens watches the weekly counts and raises an alert.
+
+- A theme is **rising** when its latest week is at least `ALERT_MIN_RATIO` times its usual rate (3× by default) **and** has at least `ALERT_MIN_ITEMS` reports (8 by default). The second rule is what stops "1 report became 3" from looking like a tripling.
+- A quiet theme's usual rate counts as at least one report a week, so a brand-new problem with ten reports is reported as 10× rather than dividing by zero.
+- The comparison uses the newest week the workspace has data for, so a check still works when an import finished a few days ago.
+- **One alert per theme per week**, enforced by the database, so nobody gets the same warning twice.
+- Alerts appear at the top of the themes dashboard. Set `SLACK_WEBHOOK_URL` to have them posted to Slack as well; without it they are recorded and shown, and nothing is sent anywhere.
+- Grouping runs queue a check automatically, or use `POST /workspaces/{slug}/alerts/check`.
+
+On 21 days of VS Code feedback this finds "Language model unavailable" (12 reports, 5.3× its usual 2.2 a week) and "Extension host repeatedly crashes" (17 reports, 3.1× its usual 5.5).
+
 ## Ask your feedback
 
 Ask a question in plain English at http://localhost:3000/workspaces/demo/ask and get an answer built only from real reports, with a numbered link to each one.

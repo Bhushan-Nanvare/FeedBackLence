@@ -194,6 +194,19 @@ class RatingUpdate(BaseModel):
     helpful: bool
 
 
+class AlertRead(BaseModel):
+    id: int
+    theme_id: int
+    theme_name: str
+    week_start: date
+    item_count: int
+    baseline: float
+    ratio: float
+    status: str
+    channel: str
+    created_at: datetime
+
+
 class ThemeWeekRead(BaseModel):
     week_start: date
     item_count: int

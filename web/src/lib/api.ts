@@ -73,6 +73,19 @@ export type ThemeDetail = Theme & {
   items: FeedbackItem[];
 };
 
+export type Alert = {
+  id: number;
+  theme_id: number;
+  theme_name: string;
+  week_start: string;
+  item_count: number;
+  baseline: number;
+  ratio: number;
+  status: string;
+  channel: string;
+  created_at: string;
+};
+
 export type CitedItem = {
   number: number;
   item: FeedbackItem;
@@ -146,6 +159,10 @@ export async function updateTheme(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(changes),
   });
+}
+
+export async function getAlerts(slug: string, limit = 5): Promise<Alert[]> {
+  return request<Alert[]>(`/workspaces/${slug}/alerts?limit=${limit}`);
 }
 
 export async function askQuestion(slug: string, question: string): Promise<Answer> {

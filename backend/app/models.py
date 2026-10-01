@@ -28,6 +28,7 @@ SOURCE_KINDS = ("github", "csv", "widget")
 JOB_STATUSES = ("queued", "running", "done", "failed")
 EVAL_LABEL_SOURCES = ("github_label", "human")
 THEME_STATUSES = ("open", "ignored")
+ALERT_STATUSES = ("pending", "sent", "failed", "skipped")
 
 TagType = Literal["bug", "feature_request", "question", "praise", "other"]
 Sentiment = Literal["negative", "neutral", "positive"]
@@ -269,6 +270,33 @@ class EvalLabel(TimestampMixin, Base):
     expected_type: Mapped[str | None] = mapped_column(String(20))
     expected_area: Mapped[str | None] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(20))
+
+
+class Alert(Base):
+    """A theme that suddenly grew. One alert per theme per week, so nobody is spammed."""
+
+    __tablename__ = "alerts"
+    __table_args__ = (
+        UniqueConstraint("theme_id", "week_start"),
+        CheckConstraint(_one_of("status", ALERT_STATUSES), name="status"),
+        Index("ix_alerts_workspace_id_created_at", "workspace_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    theme_id: Mapped[int] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"))
+    week_start: Mapped[date] = mapped_column(Date)
+    item_count: Mapped[int] = mapped_column()
+    # The usual weekly rate this was compared against, and how many times higher it is.
+    baseline: Mapped[float] = mapped_column(Float)
+    ratio: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", server_default=text("'pending'")
+    )
+    channel: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Question(Base):

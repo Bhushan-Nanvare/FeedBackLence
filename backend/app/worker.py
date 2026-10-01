@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.embedding import EMBED_ITEMS_JOB, run_embed_items_job
 from app.ai.tagging import TAG_ITEMS_JOB, run_tag_items_job
+from app.alerts.detection import CHECK_TRENDS_JOB, run_check_trends_job
 from app.config import get_settings
 from app.db import SessionLocal
 from app.errors import PermanentJobError, RateLimitedError
@@ -26,6 +27,7 @@ HANDLERS: dict[str, JobHandler] = {
     TAG_ITEMS_JOB: run_tag_items_job,
     EMBED_ITEMS_JOB: run_embed_items_job,
     CLUSTER_ITEMS_JOB: run_cluster_items_job,
+    CHECK_TRENDS_JOB: run_check_trends_job,
 }
 
 

@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     # How close a leftover item must be to a theme's centre to join it.
     theme_assign_min_similarity: float = 0.8
 
+    # A theme is "rising" when its latest week is this many times the usual rate...
+    alert_min_ratio: float = 3.0
+    # ...and has at least this many reports, so 1 → 3 doesn't count as tripling.
+    alert_min_items: int = 8
+    # Where alerts go. Without this, they are recorded but not sent anywhere.
+    slack_webhook_url: str | None = None
+    # Used to link to a theme from an alert, when the app is reachable somewhere.
+    public_web_url: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
