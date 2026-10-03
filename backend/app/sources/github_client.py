@@ -7,11 +7,17 @@ from typing import Any, Literal
 
 import httpx
 
-from app.errors import RateLimitedError
+from app.errors import PermanentJobError, RateLimitedError
 
 API_URL = "https://api.github.com"
 PAGE_SIZE = 100
 MAINTAINER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+
+
+@dataclass(frozen=True)
+class CreatedIssue:
+    number: int
+    url: str
 
 
 @dataclass(frozen=True)
@@ -94,18 +100,38 @@ class GithubClient:
 
         url: str | None = f"/repos/{owner}/{repo}/issues"
         while url is not None:
-            response = self._get(url, params)
+            response = self._request("GET", url, params=params)
             yield [GithubIssue.from_api(raw) for raw in response.json() if _is_user_issue(raw)]
             next_link = response.links.get("next")
             url = next_link["url"] if next_link else None
             params = None  # the "next" link already carries every query parameter
 
-    def _get(self, url: str, params: dict[str, str | int] | None) -> httpx.Response:
-        response = self._http.get(url, params=params)
+    def create_issue(self, owner: str, repo: str, *, title: str, body: str) -> CreatedIssue:
+        """File a new issue. Needs a token with write access to that repository."""
+        response = self._request(
+            "POST", f"/repos/{owner}/{repo}/issues", json={"title": title, "body": body}
+        )
+        created = response.json()
+        return CreatedIssue(number=created["number"], url=created["html_url"])
+
+    def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: dict[str, str | int] | None = None,
+        json: dict[str, str] | None = None,
+    ) -> httpx.Response:
+        response = self._http.request(method, url, params=params, json=json)
         if response.status_code in (403, 429):
             reset_at = _rate_limit_reset(response)
             if reset_at is not None:
                 raise RateLimitedError("GitHub", reset_at)
+        if response.status_code in (401, 403, 404) and method != "GET":
+            raise PermanentJobError(
+                f"GitHub refused the request ({response.status_code}). "
+                f"GITHUB_TOKEN needs write access to that repository."
+            )
         response.raise_for_status()
         return response
 

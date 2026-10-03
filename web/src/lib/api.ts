@@ -86,6 +86,28 @@ export type Alert = {
   created_at: string;
 };
 
+export type DuplicateCandidate = {
+  number: number;
+  title: string;
+  url: string;
+  similarity: number;
+};
+
+export type Ticket = {
+  id: number;
+  theme_id: number;
+  repo: string;
+  title: string;
+  body: string;
+  status: string;
+  duplicate_candidates: DuplicateCandidate[];
+  external_url: string | null;
+  external_id: string | null;
+  error: string | null;
+  filed_at: string | null;
+  created_at: string;
+};
+
 export type CitedItem = {
   number: number;
   item: FeedbackItem;
@@ -159,6 +181,34 @@ export async function updateTheme(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(changes),
   });
+}
+
+export async function draftTicket(
+  slug: string,
+  themeId: number,
+  repo: string | null,
+): Promise<Ticket> {
+  return request<Ticket>(`/workspaces/${slug}/themes/${themeId}/ticket`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(repo ? { repo } : {}),
+  });
+}
+
+export async function updateTicket(
+  slug: string,
+  ticketId: number,
+  changes: { title?: string; body?: string; status?: string },
+): Promise<Ticket> {
+  return request<Ticket>(`/workspaces/${slug}/tickets/${ticketId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  });
+}
+
+export async function fileTicket(slug: string, ticketId: number): Promise<Ticket> {
+  return request<Ticket>(`/workspaces/${slug}/tickets/${ticketId}/file`, { method: "POST" });
 }
 
 export async function getAlerts(slug: string, limit = 5): Promise<Alert[]> {

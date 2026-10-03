@@ -194,6 +194,47 @@ class RatingUpdate(BaseModel):
     helpful: bool
 
 
+class TicketDraftRequest(BaseModel):
+    repo: str | None = Field(default=None, pattern=GITHUB_REPO_PATTERN)
+    check_duplicates: bool = True
+
+
+class DuplicateCandidateRead(BaseModel):
+    number: int
+    title: str
+    url: str
+    similarity: float
+
+
+class TicketRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    theme_id: int
+    repo: str
+    title: str
+    body: str
+    status: str
+    duplicate_candidates: list[DuplicateCandidateRead]
+    external_url: str | None
+    external_id: str | None
+    error: str | None
+    filed_at: datetime | None
+    created_at: datetime
+
+
+class TicketUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=5, max_length=120)
+    body: str | None = Field(default=None, min_length=10, max_length=20_000)
+    status: Literal["dismissed"] | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_change(self) -> "TicketUpdate":
+        if not self.model_dump(exclude_none=True):
+            raise ValueError("Give a title, a body or a status")
+        return self
+
+
 class AlertRead(BaseModel):
     id: int
     theme_id: int

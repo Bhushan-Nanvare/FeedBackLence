@@ -29,6 +29,7 @@ JOB_STATUSES = ("queued", "running", "done", "failed")
 EVAL_LABEL_SOURCES = ("github_label", "human")
 THEME_STATUSES = ("open", "ignored")
 ALERT_STATUSES = ("pending", "sent", "failed", "skipped")
+TICKET_STATUSES = ("draft", "filed", "dismissed", "failed")
 
 TagType = Literal["bug", "feature_request", "question", "praise", "other"]
 Sentiment = Literal["negative", "neutral", "positive"]
@@ -369,3 +370,31 @@ class Job(TimestampMixin, Base):
     run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class Ticket(TimestampMixin, Base):
+    """A draft issue for a theme. It is only filed after a person approves it."""
+
+    __tablename__ = "tickets"
+    __table_args__ = (
+        CheckConstraint(_one_of("status", TICKET_STATUSES), name="status"),
+        Index("ix_tickets_workspace_id_created_at", "workspace_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    theme_id: Mapped[int] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(20), default="github", server_default="github")
+    # Where it would be filed, e.g. "my-name/my-repo".
+    repo: Mapped[str] = mapped_column(String(200))
+    title: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="draft", server_default=text("'draft'"))
+    # Existing issues that look like this one, found before filing.
+    duplicate_candidates: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    external_url: Mapped[str | None] = mapped_column(Text)
+    external_id: Mapped[str | None] = mapped_column(String(50))
+    error: Mapped[str | None] = mapped_column(Text)
+    filed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

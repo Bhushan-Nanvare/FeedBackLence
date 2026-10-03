@@ -133,6 +133,29 @@ A theme that suddenly takes off is the thing a team wants to hear about, so Feed
 
 On 21 days of VS Code feedback this finds "Language model unavailable" (12 reports, 5.3× its usual 2.2 a week) and "Extension host repeatedly crashes" (17 reports, 3.1× its usual 5.5).
 
+## Turning a theme into a ticket
+
+A theme is only useful if it reaches the issue tracker. Open a theme and use the **Ticket** panel, or the endpoints below.
+
+- **The draft writes itself** from the theme: how many reports, when they started, how fast it is growing, and five real reports quoted with links back to them.
+- **Possible duplicates are checked first.** Recent issues in the target repository are compared with the draft's title, by meaning when an embedding model is available and by shared words otherwise. Anything close is shown before you file.
+- **Nothing is filed automatically.** The draft is editable, and filing happens only when you press the button. The same step is a separate API call.
+- **It refuses to post into a repository you only read from.** Filing into `microsoft/vscode` when that is a source would spam someone else's project, so it is blocked with an explanation. Set `TICKET_REPO` to a repository you own, and give `GITHUB_TOKEN` write access to it.
+- A failed duplicate lookup never loses the draft; a wrong repository name surfaces when you file.
+
+Endpoints: `POST /workspaces/{slug}/themes/{id}/ticket`, `GET /workspaces/{slug}/tickets`, `PATCH /workspaces/{slug}/tickets/{id}`, `POST /workspaces/{slug}/tickets/{id}/file`.
+
+### Re-cleaning older reports
+
+Cleaning rules improve over time, and already-imported reports keep the text they arrived with. To bring them up to date:
+
+```bash
+cd backend
+uv run python -m app.maintenance reclean --workspace demo --dry-run
+uv run python -m app.maintenance reclean --workspace demo
+uv run python -m app.worker --once   # re-tags and re-embeds whatever changed
+```
+
 ## Ask your feedback
 
 Ask a question in plain English at http://localhost:3000/workspaces/demo/ask and get an answer built only from real reports, with a numbered link to each one.

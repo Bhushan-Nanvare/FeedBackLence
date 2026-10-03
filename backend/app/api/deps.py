@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -7,9 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.ai.embeddings import Embedder, get_shared_embedder
 from app.ai.llm import LLMClient, get_llm_client
+from app.config import get_settings
 from app.db import get_session
 from app.errors import PermanentJobError
 from app.models import Workspace
+from app.sources.github_client import GithubClient
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,17 @@ def get_llm() -> LLMClient:
 
 
 LLMDep = Annotated[LLMClient, Depends(get_llm)]
+
+
+def get_github_client() -> Iterator[GithubClient]:
+    client = GithubClient(token=get_settings().github_token)
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+GithubClientDep = Annotated[GithubClient, Depends(get_github_client)]
 
 
 def get_workspace(slug: str, session: SessionDep) -> Workspace:

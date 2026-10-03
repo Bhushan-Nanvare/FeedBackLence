@@ -35,6 +35,10 @@ _BOILERPLATE_LINE = re.compile(
     r"|Install (?:Type|Location)"
     r"|Background Updates"
     r"|Modes"
+    # The in-app issue reporter pastes a block of build details, one per line.
+    r"|Version|Commit|Date|ElectronBuildId|Electron|Chromium|Node\.js|V8|Sandboxed|OS"
+    r"|Restricted Mode|System Info|CPUs?|Memory \(System\)|GPU Status|Load \(avg\)"
+    r"|Process Argv|Screen Reader|VM"
     r")\s*:.*$",
     re.MULTILINE | re.IGNORECASE,
 )

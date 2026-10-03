@@ -120,5 +120,26 @@ def test_removes_bold_environment_lines() -> None:
     assert clean_body(body) == "The webview crashes."
 
 
+def test_removes_the_build_details_the_issue_reporter_pastes() -> None:
+    body = (
+        "The debugger stops at the wrong line.\n\n"
+        "Version: 1.122.1\n"
+        "Commit: 8761a5560cfd65fdd19ce7e2bd18dab5c0a4d84e\n"
+        "Date: 2026-05-29T09:25:37+02:00\n"
+        "Electron: 39.8.8\n"
+        "ElectronBuildId: 13870025\n"
+        "Chromium: 142.0.7444.265\n"
+        "Node.js: 22.20.1\n"
+        "Sandboxed: No\n"
+        "OS: Linux x64 7.0.9-arch2-1\n"
+        "Screen Reader: no\n\n"
+        "It only happens in a workspace with tests."
+    )
+
+    assert clean_body(body) == (
+        "The debugger stops at the wrong line.\n\nIt only happens in a workspace with tests."
+    )
+
+
 def test_removes_stray_backticks_and_empty_task_boxes() -> None:
     assert clean_body("Limit is 200000````\n\n- [ ]\n\nThanks") == "Limit is 200000\n\nThanks"

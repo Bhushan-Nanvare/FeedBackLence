@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     # Used to link to a theme from an alert, when the app is reachable somewhere.
     public_web_url: str | None = None
 
+    # The repository tickets are filed into, e.g. "my-name/my-repo". Must be yours.
+    ticket_repo: str | None = None
+    # Filing into a repository you only import from would spam someone else's project.
+    allow_filing_to_source_repo: bool = False
+    # How alike two issue titles must be to be called a possible duplicate.
+    ticket_duplicate_min_similarity: float = 0.8
+    # How many recent issues in the target repository to compare against.
+    ticket_duplicate_candidates: int = 100
+    ticket_quotes: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

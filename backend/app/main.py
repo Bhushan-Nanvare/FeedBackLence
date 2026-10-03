@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from app.api import alerts, ask, items, jobs, search, sources, tagging, themes
+from app.api import alerts, ask, items, jobs, search, sources, tagging, themes, tickets
 from app.api.deps import SessionDep
 from app.config import get_settings
 
@@ -24,6 +24,7 @@ app.include_router(themes.router)
 app.include_router(search.router)
 app.include_router(ask.router)
 app.include_router(alerts.router)
+app.include_router(tickets.router)
 
 
 @app.get("/health")

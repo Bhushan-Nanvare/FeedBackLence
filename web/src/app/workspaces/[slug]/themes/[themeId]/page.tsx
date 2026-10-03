@@ -5,6 +5,7 @@ import { getTheme, type FeedbackItem, type ThemeDetail } from "@/lib/api";
 
 import { WeeklyBars } from "../weekly-bars";
 import { ThemeActions } from "./theme-actions";
+import { TicketPanel } from "./ticket-panel";
 
 export default async function ThemePage(
   props: PageProps<"/workspaces/[slug]/themes/[themeId]">,
@@ -46,6 +47,8 @@ export default async function ThemePage(
         </h2>
         <WeeklyBars weeks={theme.weeks} title={`${theme.name}: reports per week`} />
       </section>
+
+      <TicketPanel slug={slug} themeId={theme.id} />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
