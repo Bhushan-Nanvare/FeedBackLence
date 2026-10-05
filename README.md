@@ -120,6 +120,18 @@ uv run python -m app.worker        # embeds new items, then groups them
 
 Dashboard: http://localhost:3000/workspaces/demo/themes. Endpoints: `GET /workspaces/{slug}/themes` (sort by size, growth or recency), `GET .../themes/{id}`, `PATCH .../themes/{id}` (rename or hide), `POST .../themes/recluster`.
 
+## Importing a CSV
+
+Feedback often lives in a support tool rather than GitHub. Upload an export at http://localhost:3000/workspaces/demo/import, or `POST /workspaces/{slug}/sources/csv`.
+
+- **Column names are matched loosely.** The feedback itself can be `text`, `body`, `description`, `feedback`, `comment` or `message`; a title, date, id, link and author are picked up if present. Case and spacing are ignored, so `Ticket ID` and `Submitted At` work.
+- **Rows without text are skipped and listed back**, with the row number, instead of disappearing.
+- **Re-uploading the same file is safe.** Rows are matched on their id, or on a fingerprint of their text when there is none, so nothing is duplicated and edits come through as updates.
+- **Email addresses and phone numbers are removed before anything is stored**, so they are never saved and never reach an AI model. Dates and version numbers are left alone. GitHub issues are not scrubbed, because they are already public.
+- Importing queues tagging and grouping automatically, the same as a GitHub sync.
+
+Limits: 5 MB and 5,000 rows per file.
+
 ## Alerts for themes that are growing
 
 A theme that suddenly takes off is the thing a team wants to hear about, so FeedbackLens watches the weekly counts and raises an alert.

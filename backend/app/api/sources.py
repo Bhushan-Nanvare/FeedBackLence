@@ -1,14 +1,19 @@
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, WorkspaceDep
-from app.api.schemas import GithubSourceCreate, JobRead, SourceRead
+from app.api.schemas import CsvImportResult, GithubSourceCreate, JobRead, SourceRead
 from app.jobs import queue
 from app.models import Job, Source
+from app.sources.csv_import import import_csv
 from app.sources.github_sync import GITHUB_SYNC_JOB
 
 router = APIRouter(prefix="/workspaces/{slug}/sources", tags=["sources"])
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
 @router.get("", response_model=list[SourceRead])
@@ -36,6 +41,37 @@ def create_github_source(
             status.HTTP_409_CONFLICT, f"{body.repo} is already a source in this workspace"
         ) from None
     return source
+
+
+@router.post("/csv", response_model=CsvImportResult, status_code=status.HTTP_201_CREATED)
+def import_csv_file(
+    workspace: WorkspaceDep,
+    session: SessionDep,
+    file: Annotated[UploadFile, File(description="A CSV export of feedback")],
+) -> CsvImportResult:
+    """Read feedback from a spreadsheet export. Emails and phone numbers are removed."""
+    raw = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "That file is larger than 5 MB."
+        )
+    if not raw.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "That file is empty.")
+
+    source, stats = import_csv(
+        session,
+        workspace,
+        filename=file.filename or "upload.csv",
+        content=raw.decode("utf-8-sig", errors="replace"),
+    )
+    return CsvImportResult(
+        source=SourceRead.model_validate(source),
+        created=stats.created,
+        updated=stats.updated,
+        unchanged=stats.unchanged,
+        skipped=stats.skipped,
+        problems=stats.problems,
+    )
 
 
 @router.post("/{source_id}/sync", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)

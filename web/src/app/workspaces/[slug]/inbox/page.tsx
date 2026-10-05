@@ -105,7 +105,12 @@ function Shell({ slug, children }: { slug: string; children: React.ReactNode }) 
           ← FeedbackLens
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">Inbox</h1>
-        <p className="text-sm text-zinc-500">Workspace: {slug}</p>
+        <p className="text-sm text-zinc-500">
+          Workspace: {slug} ·{" "}
+          <Link href={`/workspaces/${slug}/import`} className="underline-offset-4 hover:underline">
+            import a CSV
+          </Link>
+        </p>
       </header>
       {children}
     </main>

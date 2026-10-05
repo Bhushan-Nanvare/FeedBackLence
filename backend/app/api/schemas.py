@@ -194,6 +194,16 @@ class RatingUpdate(BaseModel):
     helpful: bool
 
 
+class CsvImportResult(BaseModel):
+    source: "SourceRead"
+    created: int
+    updated: int
+    unchanged: int
+    skipped: int
+    # Rows that could not be used, and anything else worth telling the uploader.
+    problems: list[str]
+
+
 class TicketDraftRequest(BaseModel):
     repo: str | None = Field(default=None, pattern=GITHUB_REPO_PATTERN)
     check_duplicates: bool = True

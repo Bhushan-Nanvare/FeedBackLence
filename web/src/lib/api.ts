@@ -86,6 +86,15 @@ export type Alert = {
   created_at: string;
 };
 
+export type CsvImportResult = {
+  source: { id: number; name: string; kind: string };
+  created: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  problems: string[];
+};
+
 export type DuplicateCandidate = {
   number: number;
   title: string;
@@ -180,6 +189,16 @@ export async function updateTheme(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(changes),
+  });
+}
+
+export async function importCsv(slug: string, file: File): Promise<CsvImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  // No Content-Type header: the browser adds the one multipart needs.
+  return request<CsvImportResult>(`/workspaces/${slug}/sources/csv`, {
+    method: "POST",
+    body: form,
   });
 }
 
