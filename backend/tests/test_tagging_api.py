@@ -5,13 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.main import app
 from app.models import FeedbackItem, ItemTag, Workspace
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 def test_replace_and_list_product_areas(client: TestClient, workspace: Workspace) -> None:

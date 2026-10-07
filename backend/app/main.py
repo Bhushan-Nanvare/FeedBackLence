@@ -3,7 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from app.api import alerts, ask, items, jobs, search, sources, tagging, themes, tickets
+from app.api import (
+    alerts,
+    ask,
+    auth,
+    items,
+    jobs,
+    search,
+    sources,
+    tagging,
+    themes,
+    tickets,
+    workspaces,
+)
 from app.api.deps import SessionDep
 from app.config import get_settings
 
@@ -16,6 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(workspaces.router)
 app.include_router(sources.router)
 app.include_router(jobs.router)
 app.include_router(tagging.router)

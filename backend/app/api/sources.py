@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, WorkspaceDep
+from app.api.deps import ReadableWorkspaceDep, SessionDep, WritableWorkspaceDep
 from app.api.schemas import CsvImportResult, GithubSourceCreate, JobRead, SourceRead
 from app.jobs import queue
 from app.models import Job, Source
@@ -17,7 +17,7 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
 @router.get("", response_model=list[SourceRead])
-def list_sources(workspace: WorkspaceDep, session: SessionDep) -> list[Source]:
+def list_sources(workspace: ReadableWorkspaceDep, session: SessionDep) -> list[Source]:
     return list(
         session.scalars(
             select(Source).where(Source.workspace_id == workspace.id).order_by(Source.id)
@@ -27,7 +27,7 @@ def list_sources(workspace: WorkspaceDep, session: SessionDep) -> list[Source]:
 
 @router.post("/github", response_model=SourceRead, status_code=status.HTTP_201_CREATED)
 def create_github_source(
-    body: GithubSourceCreate, workspace: WorkspaceDep, session: SessionDep
+    body: GithubSourceCreate, workspace: WritableWorkspaceDep, session: SessionDep
 ) -> Source:
     source = Source(
         workspace_id=workspace.id, kind="github", name=body.repo, config=body.model_dump()
@@ -45,7 +45,7 @@ def create_github_source(
 
 @router.post("/csv", response_model=CsvImportResult, status_code=status.HTTP_201_CREATED)
 def import_csv_file(
-    workspace: WorkspaceDep,
+    workspace: WritableWorkspaceDep,
     session: SessionDep,
     file: Annotated[UploadFile, File(description="A CSV export of feedback")],
 ) -> CsvImportResult:
@@ -75,7 +75,7 @@ def import_csv_file(
 
 
 @router.post("/{source_id}/sync", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
-def sync_source(source_id: int, workspace: WorkspaceDep, session: SessionDep) -> Job:
+def sync_source(source_id: int, workspace: WritableWorkspaceDep, session: SessionDep) -> Job:
     """Queue a sync for the worker. Returns the already-queued job if one is pending."""
     source = session.get(Source, source_id)
     if source is None or source.workspace_id != workspace.id:

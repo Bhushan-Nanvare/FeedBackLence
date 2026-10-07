@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.ai.answering import answer_question
-from app.api.deps import EmbedderDep, LLMDep, SessionDep, WorkspaceDep
+from app.api.deps import EmbedderDep, LLMDep, ReadableWorkspaceDep, SessionDep
 from app.api.schemas import (
     AnswerRead,
     AskRequest,
@@ -20,7 +20,8 @@ router = APIRouter(prefix="/workspaces/{slug}", tags=["ask"])
 @router.post("/ask", response_model=AnswerRead)
 def ask(
     body: AskRequest,
-    workspace: WorkspaceDep,
+    # Asking only reads feedback, so anyone who may read the workspace may ask.
+    workspace: ReadableWorkspaceDep,
     session: SessionDep,
     embedder: EmbedderDep,
     llm: LLMDep,
@@ -64,7 +65,7 @@ def ask(
 
 @router.post("/questions/{question_id}/rating", response_model=QuestionRead)
 def rate_answer(
-    question_id: int, body: RatingUpdate, workspace: WorkspaceDep, session: SessionDep
+    question_id: int, body: RatingUpdate, workspace: ReadableWorkspaceDep, session: SessionDep
 ) -> Question:
     """Record whether an answer helped, which is the signal for improving the prompt."""
     question = session.get(Question, question_id)

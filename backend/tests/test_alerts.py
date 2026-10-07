@@ -10,16 +10,10 @@ from app.ai.embeddings import EMBEDDING_DIMENSIONS
 from app.alerts.delivery import DeliveryStats, build_message, send_pending_alerts
 from app.alerts.detection import check_trends, find_rising_themes, record_alerts
 from app.config import Settings
-from app.main import app
 from app.models import Alert, Theme, ThemeWeeklyStat, Workspace
 
 MakeTheme = Callable[..., Theme]
 LATEST_WEEK = date(2026, 9, 21)
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 @pytest.fixture

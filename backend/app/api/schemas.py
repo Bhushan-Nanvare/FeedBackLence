@@ -7,6 +7,69 @@ from app.models import Sentiment, TagType, Urgency
 
 GITHUB_REPO_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
 AREA_SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]{0,63}$"
+WORKSPACE_SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]{1,63}$"
+# Deliberately simple: the point is to catch typos, not to police what an address may contain.
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class SignUp(BaseModel):
+    email: str = Field(pattern=EMAIL_PATTERN, max_length=320, examples=["you@example.com"])
+    name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class SignIn(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(max_length=200)
+
+
+class TokenRead(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    email: str
+    name: str
+
+
+class WorkspaceMembership(BaseModel):
+    """A workspace someone belongs to, and what they may do in it."""
+
+    slug: str
+    name: str
+    role: str
+
+
+class MemberRead(BaseModel):
+    """A person who belongs to a workspace."""
+
+    email: str
+    name: str
+    role: str
+
+
+class UserRead(BaseModel):
+    id: int
+    email: str
+    name: str
+    workspaces: list[WorkspaceMembership]
+
+
+class WorkspaceCreate(BaseModel):
+    slug: str = Field(pattern=WORKSPACE_SLUG_PATTERN, examples=["acme"])
+    name: str = Field(min_length=1, max_length=200)
+
+
+class WorkspaceRead(BaseModel):
+    slug: str
+    name: str
+    is_public: bool
+    role: str
+
+
+class MemberInvite(BaseModel):
+    email: str = Field(pattern=EMAIL_PATTERN, max_length=320)
+    # Ownership is not handed over through an invite.
+    role: Literal["admin", "member", "viewer"] = "member"
 
 
 class GithubSourceCreate(BaseModel):

@@ -8,16 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import EMBEDDING_DIMENSIONS
-from app.main import app
 from app.models import FeedbackItem, Theme, ThemeItem, ThemeWeeklyStat, Workspace
 
 MakeItem = Callable[..., FeedbackItem]
 LAST_WEEK = date(2026, 9, 14)
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 def centroid(axis: int = 0) -> list[float]:
@@ -162,11 +156,13 @@ def test_invalid_theme_changes_are_rejected(
 
 
 def test_themes_are_workspace_scoped(
-    client: TestClient, db: Session, workspace: Workspace, make_item: MakeItem
+    client: TestClient,
+    db: Session,
+    workspace: Workspace,
+    other_workspace: Workspace,
+    make_item: MakeItem,
 ) -> None:
     theme = make_theme(db, workspace, name="Theme", items=[make_item(1)])
-    db.add(Workspace(slug="other", name="Other workspace"))
-    db.commit()
 
     assert client.get(f"/workspaces/other/themes/{theme.id}").status_code == 404
 

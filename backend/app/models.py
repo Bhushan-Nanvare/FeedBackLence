@@ -30,6 +30,10 @@ EVAL_LABEL_SOURCES = ("github_label", "human")
 THEME_STATUSES = ("open", "ignored")
 ALERT_STATUSES = ("pending", "sent", "failed", "skipped")
 TICKET_STATUSES = ("draft", "filed", "dismissed", "failed")
+# Owners and admins manage the workspace, members change feedback, viewers only look.
+WORKSPACE_ROLES = ("owner", "admin", "member", "viewer")
+WRITING_ROLES = ("owner", "admin", "member")
+MANAGING_ROLES = ("owner", "admin")
 
 TagType = Literal["bug", "feature_request", "question", "praise", "other"]
 Sentiment = Literal["negative", "neutral", "positive"]
@@ -56,6 +60,33 @@ class Workspace(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     slug: Mapped[str] = mapped_column(String(64), unique=True)
     name: Mapped[str] = mapped_column(String(200))
+    # A public workspace can be read by anyone, which is how the demo works.
+    is_public: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+
+
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    # Stored lowercase, so signing in is not case sensitive.
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(String(255))
+
+
+class Membership(TimestampMixin, Base):
+    """Which workspaces a person belongs to, and what they may do there."""
+
+    __tablename__ = "memberships"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "user_id"),
+        CheckConstraint(_one_of("role", WORKSPACE_ROLES), name="role"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(20))
 
 
 class Source(TimestampMixin, Base):

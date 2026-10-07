@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     ticket_duplicate_candidates: int = 100
     ticket_quotes: int = 5
 
+    # Signs sign-in tokens. Without it a temporary one is used, so restarting the API signs
+    # everyone out: fine locally, not fine once deployed.
+    auth_secret_key: str | None = None
+    auth_token_days: int = 7
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,6 +1,8 @@
 import Link from "next/link";
 
-import { getItems, getProductAreas, type ItemPage, type ProductArea } from "@/lib/api";
+import { LoadProblem } from "@/components/load-problem";
+import type { ItemPage, ProductArea } from "@/lib/api";
+import { getItems, getProductAreas } from "@/lib/api-server";
 
 import { FilterBar } from "./filter-bar";
 import { ItemCard } from "./item-card";
@@ -36,20 +38,18 @@ export default async function InboxPage(props: PageProps<"/workspaces/[slug]/inb
   filters.set("offset", String((page - 1) * PAGE_SIZE));
 
   let result: { items: ItemPage; areas: ProductArea[] } | null = null;
+  let problem: unknown = null;
   try {
     const [items, areas] = await Promise.all([getItems(slug, filters), getProductAreas(slug)]);
     result = { items, areas };
-  } catch {
-    result = null;
+  } catch (error) {
+    problem = error;
   }
 
   if (result === null) {
     return (
       <Shell slug={slug}>
-        <p className="rounded-xl border border-red-200 p-4 text-sm dark:border-red-900">
-          Could not reach the API. Start it with{" "}
-          <code className="font-mono">uv run uvicorn app.main:app</code> and reload.
-        </p>
+        <LoadProblem error={problem} next={`/workspaces/${slug}/inbox`} />
       </Shell>
     );
   }

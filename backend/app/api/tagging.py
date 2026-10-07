@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import Select, delete, func, select
 
 from app.ai.tagging import pending_items_query, request_tagging
-from app.api.deps import SessionDep, WorkspaceDep
+from app.api.deps import ManagedWorkspaceDep, ReadableWorkspaceDep, SessionDep, WritableWorkspaceDep
 from app.api.schemas import JobRead, ProductAreaIn, ProductAreaRead, TaggingStatus
 from app.models import FeedbackItem, ItemTag, Job, ProductArea
 
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/workspaces/{slug}", tags=["tagging"])
 
 
 @router.get("/product-areas", response_model=list[ProductAreaRead])
-def list_product_areas(workspace: WorkspaceDep, session: SessionDep) -> list[ProductArea]:
+def list_product_areas(workspace: ReadableWorkspaceDep, session: SessionDep) -> list[ProductArea]:
     return list(
         session.scalars(
             select(ProductArea)
@@ -22,7 +22,7 @@ def list_product_areas(workspace: WorkspaceDep, session: SessionDep) -> list[Pro
 
 @router.put("/product-areas", response_model=list[ProductAreaRead])
 def replace_product_areas(
-    areas: list[ProductAreaIn], workspace: WorkspaceDep, session: SessionDep
+    areas: list[ProductAreaIn], workspace: ManagedWorkspaceDep, session: SessionDep
 ) -> list[ProductArea]:
     """Replace the workspace's product areas. Existing tags keep their area until re-tagged."""
     slugs = [area.slug for area in areas]
@@ -38,7 +38,7 @@ def replace_product_areas(
 
 
 @router.post("/tagging/run", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
-def run_tagging(workspace: WorkspaceDep, session: SessionDep) -> Job:
+def run_tagging(workspace: WritableWorkspaceDep, session: SessionDep) -> Job:
     """Queue tagging for untagged or changed items. Syncs also queue this automatically."""
     job = request_tagging(session, workspace.id)
     session.commit()
@@ -46,7 +46,7 @@ def run_tagging(workspace: WorkspaceDep, session: SessionDep) -> Job:
 
 
 @router.get("/tagging/status", response_model=TaggingStatus)
-def tagging_status(workspace: WorkspaceDep, session: SessionDep) -> TaggingStatus:
+def tagging_status(workspace: ReadableWorkspaceDep, session: SessionDep) -> TaggingStatus:
     def count(query: Select) -> int:
         return session.scalar(select(func.count()).select_from(query.subquery())) or 0
 

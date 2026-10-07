@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.main import app
 from app.models import FeedbackItem, Job, Source, Workspace
 from app.processing.privacy import scrub_personal_data
 from app.sources.csv_import import import_csv
@@ -17,11 +16,6 @@ SIMPLE_CSV = """title,text,created_at
 Terminal crashes,It dies when I split a pane,2026-09-01
 Chat is slow,The chat panel takes ages,2026-09-02
 """
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 def items(db: Session) -> list[FeedbackItem]:

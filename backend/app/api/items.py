@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import Select, func, or_, select
 
 from app.ai.tagging import OTHER_AREA, PROMPT_VERSION
-from app.api.deps import SessionDep, WorkspaceDep
+from app.api.deps import ReadableWorkspaceDep, SessionDep, WritableWorkspaceDep
 from app.api.schemas import (
     FeedbackItemDetail,
     FeedbackItemRead,
@@ -32,7 +32,7 @@ LIKE_ESCAPES = str.maketrans({"\\": "\\\\", "%": "\\%", "_": "\\_"})
 
 @router.get("", response_model=ItemPage)
 def list_items(
-    filters: Annotated[ItemFilters, Query()], workspace: WorkspaceDep, session: SessionDep
+    filters: Annotated[ItemFilters, Query()], workspace: ReadableWorkspaceDep, session: SessionDep
 ) -> ItemPage:
     query = _filtered_items(workspace.id, filters)
     total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
@@ -43,13 +43,13 @@ def list_items(
 
 
 @router.get("/{item_id}", response_model=FeedbackItemDetail)
-def get_item(item_id: int, workspace: WorkspaceDep, session: SessionDep) -> FeedbackItem:
+def get_item(item_id: int, workspace: ReadableWorkspaceDep, session: SessionDep) -> FeedbackItem:
     return _item_or_404(session, workspace, item_id)
 
 
 @router.patch("/{item_id}/tag", response_model=ItemTagRead)
 def correct_tag(
-    item_id: int, changes: ItemTagUpdate, workspace: WorkspaceDep, session: SessionDep
+    item_id: int, changes: ItemTagUpdate, workspace: WritableWorkspaceDep, session: SessionDep
 ) -> ItemTag:
     """Save a person's correction. Corrected tags are never overwritten by AI."""
     item = _item_or_404(session, workspace, item_id)

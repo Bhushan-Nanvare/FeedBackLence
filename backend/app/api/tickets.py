@@ -1,7 +1,13 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import EmbedderDep, GithubClientDep, SessionDep, WorkspaceDep
+from app.api.deps import (
+    EmbedderDep,
+    GithubClientDep,
+    ReadableWorkspaceDep,
+    SessionDep,
+    WritableWorkspaceDep,
+)
 from app.api.schemas import TicketDraftRequest, TicketRead, TicketUpdate
 from app.errors import PermanentJobError, RateLimitedError
 from app.models import Theme, Ticket, Workspace
@@ -16,7 +22,7 @@ router = APIRouter(prefix="/workspaces/{slug}", tags=["tickets"])
 def draft_for_theme(
     theme_id: int,
     body: TicketDraftRequest,
-    workspace: WorkspaceDep,
+    workspace: WritableWorkspaceDep,
     session: SessionDep,
     embedder: EmbedderDep,
     github: GithubClientDep,
@@ -45,7 +51,7 @@ def draft_for_theme(
 
 
 @router.get("/tickets", response_model=list[TicketRead])
-def list_tickets(workspace: WorkspaceDep, session: SessionDep) -> list[Ticket]:
+def list_tickets(workspace: ReadableWorkspaceDep, session: SessionDep) -> list[Ticket]:
     return list(
         session.scalars(
             select(Ticket)
@@ -57,7 +63,7 @@ def list_tickets(workspace: WorkspaceDep, session: SessionDep) -> list[Ticket]:
 
 @router.patch("/tickets/{ticket_id}", response_model=TicketRead)
 def update_ticket(
-    ticket_id: int, changes: TicketUpdate, workspace: WorkspaceDep, session: SessionDep
+    ticket_id: int, changes: TicketUpdate, workspace: WritableWorkspaceDep, session: SessionDep
 ) -> Ticket:
     """Edit the draft before filing it, or drop it."""
     ticket = _ticket_or_404(session, workspace, ticket_id)
@@ -73,7 +79,7 @@ def update_ticket(
 
 @router.post("/tickets/{ticket_id}/file", response_model=TicketRead)
 def file_now(
-    ticket_id: int, workspace: WorkspaceDep, session: SessionDep, github: GithubClientDep
+    ticket_id: int, workspace: WritableWorkspaceDep, session: SessionDep, github: GithubClientDep
 ) -> Ticket:
     """File the draft as a real issue. This is the approval step, so it is never automatic."""
     ticket = _ticket_or_404(session, workspace, ticket_id)

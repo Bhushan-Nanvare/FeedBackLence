@@ -6,15 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.main import app
 from app.models import EvalLabel, FeedbackItem, ItemTag, ProductArea, Workspace
 
 MakeItem = Callable[..., FeedbackItem]
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 @pytest.fixture
@@ -136,7 +130,7 @@ def test_invalid_filters_are_rejected(
 
 
 def test_item_detail_includes_body_and_is_workspace_scoped(
-    client: TestClient, db: Session, make_item: MakeItem, workspace: Workspace
+    client: TestClient, make_item: MakeItem, workspace: Workspace, other_workspace: Workspace
 ) -> None:
     item = make_item(1)
 
@@ -144,9 +138,6 @@ def test_item_detail_includes_body_and_is_workspace_scoped(
 
     assert detail.status_code == 200
     assert detail.json()["body_clean"] == item.body_clean
-
-    db.add(Workspace(slug="other", name="Other workspace"))
-    db.commit()
     assert client.get(f"/workspaces/other/items/{item.id}").status_code == 404
 
 

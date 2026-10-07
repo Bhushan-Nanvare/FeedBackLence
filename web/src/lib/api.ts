@@ -1,3 +1,5 @@
+import { readTokenInBrowser } from "./session";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Health = {
@@ -132,6 +134,40 @@ export type Answer = {
   dropped_citations: number[];
 };
 
+export type WorkspaceMembership = {
+  slug: string;
+  name: string;
+  role: string;
+};
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  name: string;
+  workspaces: WorkspaceMembership[];
+};
+
+export type SignInResult = {
+  access_token: string;
+  token_type: string;
+  user_id: number;
+  email: string;
+  name: string;
+};
+
+export type Workspace = {
+  slug: string;
+  name: string;
+  is_public: boolean;
+  role: string;
+};
+
+export type Member = {
+  email: string;
+  name: string;
+  role: string;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -152,12 +188,63 @@ export async function getHealth(): Promise<Health | null> {
   }
 }
 
-export async function getItems(slug: string, filters: URLSearchParams): Promise<ItemPage> {
-  return request<ItemPage>(`/workspaces/${slug}/items?${filters.toString()}`);
+export async function register(
+  email: string,
+  name: string,
+  password: string,
+): Promise<SignInResult> {
+  return request<SignInResult>("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, name, password }),
+  });
 }
 
-export async function getProductAreas(slug: string): Promise<ProductArea[]> {
-  return request<ProductArea[]>(`/workspaces/${slug}/product-areas`);
+export async function signIn(email: string, password: string): Promise<SignInResult> {
+  return request<SignInResult>("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function getMe(token?: string | null): Promise<AuthUser> {
+  return request<AuthUser>("/auth/me", undefined, token);
+}
+
+export async function createWorkspace(slug: string, name: string): Promise<Workspace> {
+  return request<Workspace>("/workspaces", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug, name }),
+  });
+}
+
+export async function getMembers(slug: string, token?: string | null): Promise<Member[]> {
+  return request<Member[]>(`/workspaces/${slug}/members`, undefined, token);
+}
+
+export async function addMember(slug: string, email: string, role: string): Promise<Member> {
+  return request<Member>(`/workspaces/${slug}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export async function getItems(
+  slug: string,
+  filters: URLSearchParams,
+  token?: string | null,
+): Promise<ItemPage> {
+  return request<ItemPage>(`/workspaces/${slug}/items?${filters.toString()}`, undefined, token);
+}
+
+export async function getProductAreas(
+  slug: string,
+  token?: string | null,
+): Promise<ProductArea[]> {
+  return request<ProductArea[]>(`/workspaces/${slug}/product-areas`, undefined, token);
 }
 
 export async function correctItemTag(
@@ -172,12 +259,20 @@ export async function correctItemTag(
   });
 }
 
-export async function getThemes(slug: string, params: URLSearchParams): Promise<ThemeList> {
-  return request<ThemeList>(`/workspaces/${slug}/themes?${params.toString()}`);
+export async function getThemes(
+  slug: string,
+  params: URLSearchParams,
+  token?: string | null,
+): Promise<ThemeList> {
+  return request<ThemeList>(`/workspaces/${slug}/themes?${params.toString()}`, undefined, token);
 }
 
-export async function getTheme(slug: string, themeId: number): Promise<ThemeDetail> {
-  return request<ThemeDetail>(`/workspaces/${slug}/themes/${themeId}`);
+export async function getTheme(
+  slug: string,
+  themeId: number,
+  token?: string | null,
+): Promise<ThemeDetail> {
+  return request<ThemeDetail>(`/workspaces/${slug}/themes/${themeId}`, undefined, token);
 }
 
 export async function updateTheme(
@@ -230,8 +325,12 @@ export async function fileTicket(slug: string, ticketId: number): Promise<Ticket
   return request<Ticket>(`/workspaces/${slug}/tickets/${ticketId}/file`, { method: "POST" });
 }
 
-export async function getAlerts(slug: string, limit = 5): Promise<Alert[]> {
-  return request<Alert[]>(`/workspaces/${slug}/alerts?limit=${limit}`);
+export async function getAlerts(
+  slug: string,
+  limit = 5,
+  token?: string | null,
+): Promise<Alert[]> {
+  return request<Alert[]>(`/workspaces/${slug}/alerts?limit=${limit}`, undefined, token);
 }
 
 export async function askQuestion(slug: string, question: string): Promise<Answer> {
@@ -254,8 +353,17 @@ export async function rateAnswer(
   });
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init });
+/**
+ * On the server the caller passes the token it read from the cookie; in the browser we read the
+ * cookie here, so forms do not have to think about it.
+ */
+async function request<T>(path: string, init?: RequestInit, token?: string | null): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const bearer = token ?? readTokenInBrowser();
+  if (bearer) {
+    headers.set("Authorization", `Bearer ${bearer}`);
+  }
+  const response = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init, headers });
   if (!response.ok) {
     throw new ApiError(await explain(response), response.status);
   }

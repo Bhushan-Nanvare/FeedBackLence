@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getTheme, type FeedbackItem, type ThemeDetail } from "@/lib/api";
+import { LoadProblem } from "@/components/load-problem";
+import { ApiError, type FeedbackItem, type ThemeDetail } from "@/lib/api";
+import { getTheme } from "@/lib/api-server";
 
 import { WeeklyBars } from "../weekly-bars";
 import { ThemeActions } from "./theme-actions";
@@ -12,11 +14,26 @@ export default async function ThemePage(
 ) {
   const { slug, themeId } = await props.params;
 
-  let theme: ThemeDetail;
+  let theme: ThemeDetail | null = null;
+  let problem: unknown = null;
   try {
     theme = await getTheme(slug, Number(themeId));
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    problem = error;
+  }
+
+  if (theme === null) {
+    return (
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
+        <Link href="/" className="text-sm text-zinc-500 underline-offset-4 hover:underline">
+          ← FeedbackLens
+        </Link>
+        <LoadProblem error={problem} next={`/workspaces/${slug}/themes/${themeId}`} />
+      </main>
+    );
   }
 
   const firstSeen = theme.first_seen_at ? formatDate(theme.first_seen_at) : "unknown";

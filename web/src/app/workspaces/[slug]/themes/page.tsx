@@ -1,6 +1,8 @@
 import Link from "next/link";
 
-import { getAlerts, getThemes, type Alert, type Theme } from "@/lib/api";
+import { LoadProblem } from "@/components/load-problem";
+import type { Alert, Theme } from "@/lib/api";
+import { getAlerts, getThemes } from "@/lib/api-server";
 
 import { SortLinks } from "./sort-links";
 import { WeeklyBars } from "./weekly-bars";
@@ -16,6 +18,7 @@ export default async function ThemesPage(props: PageProps<"/workspaces/[slug]/th
 
   let themes: Theme[] | null = null;
   let alerts: Alert[] = [];
+  let problem: unknown = null;
   try {
     const [result, raised] = await Promise.all([
       getThemes(slug, new URLSearchParams({ sort, limit: "50" })),
@@ -23,8 +26,8 @@ export default async function ThemesPage(props: PageProps<"/workspaces/[slug]/th
     ]);
     themes = result.themes;
     alerts = raised;
-  } catch {
-    themes = null;
+  } catch (error) {
+    problem = error;
   }
 
   return (
@@ -43,10 +46,7 @@ export default async function ThemesPage(props: PageProps<"/workspaces/[slug]/th
       </header>
 
       {themes === null ? (
-        <p className="rounded-xl border border-red-200 p-4 text-sm dark:border-red-900">
-          Could not reach the API. Start it with{" "}
-          <code className="font-mono">uv run uvicorn app.main:app</code> and reload.
-        </p>
+        <LoadProblem error={problem} next={`/workspaces/${slug}/themes`} />
       ) : themes.length === 0 ? (
         <p className="rounded-xl border border-zinc-200 p-6 text-sm text-zinc-500 dark:border-zinc-800">
           No themes yet. Import feedback, then run the worker: grouping starts once items have

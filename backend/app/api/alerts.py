@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from app.alerts.detection import request_trend_check
-from app.api.deps import SessionDep, WorkspaceDep
+from app.api.deps import ReadableWorkspaceDep, SessionDep, WritableWorkspaceDep
 from app.api.schemas import AlertRead, JobRead
 from app.models import Alert, Job, Theme
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/workspaces/{slug}/alerts", tags=["alerts"])
 
 @router.get("", response_model=list[AlertRead])
 def list_alerts(
-    workspace: WorkspaceDep,
+    workspace: ReadableWorkspaceDep,
     session: SessionDep,
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[AlertRead]:
@@ -42,7 +42,7 @@ def list_alerts(
 
 
 @router.post("/check", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
-def check_now(workspace: WorkspaceDep, session: SessionDep) -> Job:
+def check_now(workspace: WritableWorkspaceDep, session: SessionDep) -> Job:
     """Look for rising themes now. Grouping runs queue this automatically."""
     job = request_trend_check(session, workspace.id)
     session.commit()

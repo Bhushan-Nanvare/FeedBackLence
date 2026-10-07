@@ -123,10 +123,10 @@ def theme(db: Session, workspace: Workspace, make_item: MakeItem) -> Theme:
 
 
 @pytest.fixture
-def client(db: Session) -> Iterator[TestClient]:
+def client(client: TestClient) -> Iterator[TestClient]:
     app.dependency_overrides[get_optional_embedder] = lambda: FakeEmbedder()
     app.dependency_overrides[get_github_client] = lambda: FakeGithub()
-    yield TestClient(app)
+    yield client
     app.dependency_overrides.clear()
 
 
@@ -310,13 +310,11 @@ def test_a_dismissed_draft_is_not_filed(
 
 
 def test_tickets_are_workspace_scoped(
-    client: TestClient, db: Session, workspace: Workspace, theme: Theme
+    client: TestClient, workspace: Workspace, other_workspace: Workspace, theme: Theme
 ) -> None:
     ticket_id = client.post(
         f"/workspaces/test/themes/{theme.id}/ticket", json={"repo": OUR_REPO}
     ).json()["id"]
-    db.add(Workspace(slug="other", name="Other workspace"))
-    db.commit()
 
     assert client.post(f"/workspaces/other/tickets/{ticket_id}/file").status_code == 404
     assert client.get("/workspaces/other/tickets").json() == []

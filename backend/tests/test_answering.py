@@ -179,10 +179,10 @@ def test_build_prompt_trims_long_reports(
 
 
 @pytest.fixture
-def client(db: Session) -> Iterator[TestClient]:
+def client(client: TestClient) -> Iterator[TestClient]:
     app.dependency_overrides[get_optional_embedder] = lambda: None
     app.dependency_overrides[get_llm] = lambda: FakeLLM("The terminal crashes [1].")
-    yield TestClient(app)
+    yield client
     app.dependency_overrides.clear()
 
 
@@ -198,6 +198,19 @@ def test_ask_endpoint_returns_the_answer_with_its_sources(
     assert body["sources"][0]["number"] == 1
     assert body["sources"][0]["item"]["title"].startswith("Terminal")
     assert body["considered_count"] >= 1
+
+
+def test_anyone_may_ask_in_a_public_workspace(
+    client: TestClient, db: Session, workspace: Workspace, feedback: list[FeedbackItem]
+) -> None:
+    """The demo workspace is public, and asking it questions is the point of the demo."""
+    workspace.is_public = True
+    db.commit()
+
+    response = TestClient(app).post("/workspaces/test/ask", json={"question": "terminal crashes"})
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "The terminal crashes [1]."
 
 
 def test_ask_endpoint_validates_the_question(client: TestClient, workspace: Workspace) -> None:
@@ -223,13 +236,14 @@ def test_rating_an_answer(
 
 
 def test_rating_another_workspaces_question_is_refused(
-    client: TestClient, db: Session, workspace: Workspace, feedback: list[FeedbackItem]
+    client: TestClient,
+    workspace: Workspace,
+    other_workspace: Workspace,
+    feedback: list[FeedbackItem],
 ) -> None:
     question_id = client.post("/workspaces/test/ask", json={"question": "terminal crashes"}).json()[
         "question_id"
     ]
-    db.add(Workspace(slug="other", name="Other workspace"))
-    db.commit()
 
     response = client.post(
         f"/workspaces/other/questions/{question_id}/rating", json={"helpful": False}

@@ -88,9 +88,9 @@ def write_item(db: Session, make_item: MakeItem) -> WriteItem:
 
 
 @pytest.fixture
-def client(db: Session) -> Iterator[TestClient]:
+def client(client: TestClient) -> Iterator[TestClient]:
     app.dependency_overrides[get_optional_embedder] = lambda: FakeEmbedder(axis_vector(0))
-    yield TestClient(app)
+    yield client
     app.dependency_overrides.clear()
 
 

@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { connection } from "next/server";
 
-import { getHealth } from "@/lib/api";
+import { getHealth, type AuthUser } from "@/lib/api";
+import { currentUser } from "@/lib/api-server";
+
+import { NewWorkspace } from "./new-workspace";
 
 export default async function Home() {
   // Status must be checked on every request, not baked in at build time.
   await connection();
-  const health = await getHealth();
+  const [health, user] = await Promise.all([getHealth(), currentUser()]);
 
   const checks = [
     {
@@ -44,7 +47,7 @@ export default async function Home() {
             href="/workspaces/demo/themes"
             className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
           >
-            See the themes
+            See the demo themes
           </Link>
           <Link
             href="/workspaces/demo/ask"
@@ -52,14 +55,18 @@ export default async function Home() {
           >
             Ask a question
           </Link>
-          <Link
-            href="/workspaces/demo/inbox"
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-          >
-            Open the inbox
-          </Link>
+          {user === null && (
+            <Link
+              href="/signin"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </header>
+
+      {user !== null && <YourWorkspaces user={user} />}
 
       <section
         aria-labelledby="status-heading"
@@ -87,5 +94,55 @@ export default async function Home() {
         </ul>
       </section>
     </main>
+  );
+}
+
+function YourWorkspaces({ user }: { user: AuthUser }) {
+  return (
+    <section
+      aria-labelledby="workspaces-heading"
+      className="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-800"
+    >
+      <h2
+        id="workspaces-heading"
+        className="text-sm font-medium uppercase tracking-wide text-zinc-500"
+      >
+        Your workspaces
+      </h2>
+      {user.workspaces.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          You are not in a workspace yet. Make one, or ask someone to invite you to theirs.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {user.workspaces.map((workspace) => (
+            <li key={workspace.slug} className="flex items-center justify-between gap-4">
+              <Link
+                href={`/workspaces/${workspace.slug}/themes`}
+                className="truncate font-medium underline-offset-4 hover:underline"
+              >
+                {workspace.name}
+              </Link>
+              <span className="flex items-center gap-3 text-sm text-zinc-500">
+                <span className="font-mono text-xs">{workspace.role}</span>
+                <Link
+                  href={`/workspaces/${workspace.slug}/inbox`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  inbox
+                </Link>
+                <Link
+                  href={`/workspaces/${workspace.slug}/import`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  import
+                </Link>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <NewWorkspace />
+    </section>
   );
 }

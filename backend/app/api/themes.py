@@ -5,7 +5,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
-from app.api.deps import SessionDep, WorkspaceDep
+from app.api.deps import ReadableWorkspaceDep, SessionDep, WritableWorkspaceDep
 from app.api.schemas import (
     FeedbackItemRead,
     JobRead,
@@ -25,7 +25,7 @@ ITEMS_IN_DETAIL = 20
 
 
 @router.post("/recluster", response_model=JobRead, status_code=status.HTTP_202_ACCEPTED)
-def recluster(workspace: WorkspaceDep, session: SessionDep) -> Job:
+def recluster(workspace: WritableWorkspaceDep, session: SessionDep) -> Job:
     """Rebuild the themes from scratch. Imports queue this automatically."""
     job = request_clustering(session, workspace.id)
     session.commit()
@@ -34,7 +34,7 @@ def recluster(workspace: WorkspaceDep, session: SessionDep) -> Job:
 
 @router.get("", response_model=ThemeList)
 def list_themes(
-    workspace: WorkspaceDep,
+    workspace: ReadableWorkspaceDep,
     session: SessionDep,
     status_filter: Literal["open", "ignored"] | None = Query(default=None, alias="status"),
     sort: Literal["size", "growth", "recent"] = "size",
@@ -52,7 +52,7 @@ def list_themes(
 
 
 @router.get("/{theme_id}", response_model=ThemeDetail)
-def get_theme(theme_id: int, workspace: WorkspaceDep, session: SessionDep) -> ThemeDetail:
+def get_theme(theme_id: int, workspace: ReadableWorkspaceDep, session: SessionDep) -> ThemeDetail:
     theme = _theme_or_404(session, workspace, theme_id)
     weeks = _weeks_by_theme(session, [theme.id]).get(theme.id, [])
     items = session.scalars(
@@ -71,7 +71,7 @@ def get_theme(theme_id: int, workspace: WorkspaceDep, session: SessionDep) -> Th
 
 @router.patch("/{theme_id}", response_model=ThemeRead)
 def update_theme(
-    theme_id: int, changes: ThemeUpdate, workspace: WorkspaceDep, session: SessionDep
+    theme_id: int, changes: ThemeUpdate, workspace: WritableWorkspaceDep, session: SessionDep
 ) -> ThemeRead:
     """Rename a theme or hide it. A renamed theme keeps its name through later runs."""
     theme = _theme_or_404(session, workspace, theme_id)

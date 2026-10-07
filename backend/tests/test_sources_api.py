@@ -2,13 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.main import app
 from app.models import Workspace
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 def create_source(client: TestClient, repo: str = "microsoft/vscode") -> int:
@@ -63,10 +57,8 @@ def test_sync_queues_a_single_job_per_source(client: TestClient, workspace: Work
 
 
 def test_cannot_touch_another_workspaces_source(
-    client: TestClient, db: Session, workspace: Workspace
+    client: TestClient, workspace: Workspace, other_workspace: Workspace
 ) -> None:
-    db.add(Workspace(slug="other", name="Other workspace"))
-    db.commit()
     source_id = create_source(client)
 
     assert client.post(f"/workspaces/other/sources/{source_id}/sync").status_code == 404

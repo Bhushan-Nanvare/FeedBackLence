@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import EmbedderDep, SessionDep, WorkspaceDep
+from app.api.deps import EmbedderDep, ReadableWorkspaceDep, SessionDep
 from app.api.schemas import FeedbackItemRead, SearchHitRead, SearchQuery, SearchResults
 from app.search.hybrid import SearchFilters, hybrid_search, load_items
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/workspaces/{slug}/search", tags=["search"])
 @router.get("", response_model=SearchResults)
 def search(
     query: Annotated[SearchQuery, Query()],
-    workspace: WorkspaceDep,
+    workspace: ReadableWorkspaceDep,
     session: SessionDep,
     embedder: EmbedderDep,
 ) -> SearchResults:

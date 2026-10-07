@@ -19,13 +19,22 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.auth.passwords import hash_password  # noqa: E402
+from app.auth.tokens import create_access_token, signing_secret  # noqa: E402
+from app.config import get_settings  # noqa: E402
 from app.db import Base, SessionLocal, engine  # noqa: E402
-from app.models import FeedbackItem, Source, Workspace  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models import FeedbackItem, Membership, Source, User, Workspace  # noqa: E402
 from app.processing.hashing import content_hash  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
+OWNER_EMAIL = "owner@example.com"
+OWNER_PASSWORD = "test-password"
+# Hashing is deliberately slow, so the test user's hash is computed once for the whole run.
+OWNER_PASSWORD_HASH = hash_password(OWNER_PASSWORD)
 
 
 def _ensure_database_exists(url: str) -> None:
@@ -60,6 +69,43 @@ def db() -> Iterator[Session]:
 def workspace(db: Session) -> Workspace:
     workspace = Workspace(slug="test", name="Test workspace")
     db.add(workspace)
+    db.commit()
+    return workspace
+
+
+@pytest.fixture
+def owner(db: Session, workspace: Workspace) -> User:
+    """A signed-up person who owns the test workspace."""
+    user = User(email=OWNER_EMAIL, name="Test Owner", password_hash=OWNER_PASSWORD_HASH)
+    db.add(user)
+    db.flush()
+    db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="owner"))
+    db.commit()
+    return user
+
+
+@pytest.fixture
+def auth_headers(owner: User) -> dict[str, str]:
+    token = create_access_token(
+        owner.id, secret=signing_secret(get_settings()), valid_for=timedelta(hours=1)
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def client(auth_headers: dict[str, str]) -> Iterator[TestClient]:
+    """A signed-in client. Tests that need an anonymous one build their own."""
+    yield TestClient(app, headers=auth_headers)
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def other_workspace(db: Session, owner: User) -> Workspace:
+    """A second workspace the same person owns, for proving data stays in its own workspace."""
+    workspace = Workspace(slug="other", name="Other workspace")
+    db.add(workspace)
+    db.flush()
+    db.add(Membership(workspace_id=workspace.id, user_id=owner.id, role="owner"))
     db.commit()
     return workspace
 

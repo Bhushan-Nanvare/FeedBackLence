@@ -2,7 +2,7 @@
 
 FeedbackLens collects user feedback from GitHub issues, CSV files and an embeddable widget, groups it into themes, spots problems that are growing and turns the biggest ones into tickets backed by real quotes.
 
-> **Status:** Phase 0: project setup.
+> **Status:** Phase 5: accounts, workspaces and permissions are in. Widget, cost tracking and deployment are next.
 
 ## Tech stack
 
@@ -60,6 +60,32 @@ npm run dev
 The home page shows whether the API, database and pgvector are reachable.
 
 Settings have working local defaults. To override them, copy `.env.example` to `.env` (backend) and `web/.env.example` to `web/.env.local` (frontend).
+
+## Accounts and workspaces
+
+Feedback belongs to a workspace, and a workspace is private unless it is marked public. The `demo` workspace is public, so anyone can read it and ask it questions without an account; everything else needs one.
+
+**Create an account** at http://localhost:3000/signin — email, your name, and a password of at least 8 characters. Passwords are stored as scrypt hashes, never as text. Creating a workspace makes you its owner.
+
+**Roles** decide what you may do in a workspace:
+
+| Role | May |
+| --- | --- |
+| `owner`, `admin` | everything, plus product areas and inviting people |
+| `member` | import feedback, correct tags, rename themes, draft and file tickets |
+| `viewer` | read, search and ask questions |
+
+Owners and admins invite people who have already registered:
+
+```bash
+curl -X POST http://localhost:8000/workspaces/demo/members \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"email": "teammate@example.com", "role": "member"}'
+```
+
+**Behind the scenes:** signing in returns a signed token that lasts `AUTH_TOKEN_DAYS` (7 by default). The web app keeps it in a cookie and sends it as `Authorization: Bearer …`; pages read the same cookie on the server. To call the API directly, `POST /auth/login` and pass the `access_token` the same way, or click **Authorize** in http://localhost:8000/docs.
+
+Set `AUTH_SECRET_KEY` in `.env` before deploying. Without it the API signs tokens with a key it makes at startup, so every restart signs everyone out.
 
 ## Import GitHub issues
 
@@ -225,8 +251,13 @@ The same checks run in GitHub Actions on every push and pull request.
 ## Roadmap
 
 - [x] Phase 0: project setup
-- [ ] Phase 1: GitHub import, AI tagging, feedback inbox
-- [ ] Phase 2: theme grouping and dashboard
-- [ ] Phase 3: ask questions with cited answers
-- [ ] Phase 4: trend alerts, theme to ticket, CSV import
-- [ ] Phase 5: workspaces and login, widget, cost tracking, evaluation in CI, deployment
+- [x] Phase 1: GitHub import, AI tagging, feedback inbox
+- [x] Phase 2: theme grouping and dashboard
+- [x] Phase 3: ask questions with cited answers
+- [x] Phase 4: trend alerts, theme to ticket, CSV import
+- Phase 5:
+  - [x] accounts, workspaces and roles
+  - [ ] embeddable feedback widget
+  - [ ] AI cost tracking
+  - [ ] evaluation suite in CI
+  - [ ] deployment and public demo
