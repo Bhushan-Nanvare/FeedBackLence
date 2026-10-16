@@ -137,6 +137,12 @@ function YourWorkspaces({ user }: { user: AuthUser }) {
                 >
                   import
                 </Link>
+                <Link
+                  href={`/workspaces/${workspace.slug}/usage`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  usage
+                </Link>
               </span>
             </li>
           ))}

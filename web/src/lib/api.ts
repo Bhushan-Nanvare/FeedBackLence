@@ -168,6 +168,44 @@ export type Member = {
   role: string;
 };
 
+// ---------------------------------------------------------------------------
+// AI cost tracking — mirrors backend schemas FeatureUsage, DailyUsage and
+// UsageSummary.  All fields come straight from the GET /ai/usage endpoint.
+// ---------------------------------------------------------------------------
+
+/** Token and call totals for one AI feature (e.g. "tagging", "embedding", "ask"). */
+export type FeatureUsage = {
+  feature: string;
+  total_calls: number;
+  succeeded_calls: number;
+  total_items: number;
+  input_tokens: number;
+  output_tokens: number;
+  avg_latency_ms: number;
+};
+
+/** Token and call totals for one calendar day, across all features. */
+export type DailyUsage = {
+  date: string;
+  total_calls: number;
+  succeeded_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+};
+
+/** The full response from GET /workspaces/{slug}/ai/usage. */
+export type UsageSummary = {
+  total_calls: number;
+  succeeded_calls: number;
+  total_items: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  by_feature: FeatureUsage[];
+  daily: DailyUsage[];
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -339,6 +377,15 @@ export async function askQuestion(slug: string, question: string): Promise<Answe
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
   });
+}
+
+/** Fetch aggregated AI usage (tokens, calls, cost) for a workspace. */
+export async function getUsage(
+  slug: string,
+  days = 30,
+  token?: string | null,
+): Promise<UsageSummary> {
+  return request<UsageSummary>(`/workspaces/${slug}/ai/usage?days=${days}`, undefined, token);
 }
 
 export async function rateAnswer(

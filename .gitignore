@@ -19,3 +19,7 @@ evals/latest.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# AI assistant configuration — local only, never committed.
+.claude/
+.gemini/

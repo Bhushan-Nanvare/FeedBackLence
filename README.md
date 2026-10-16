@@ -208,6 +208,18 @@ Word search alone works without any AI key, so `GET /workspaces/{slug}/search?q=
 
 Endpoints: `GET /workspaces/{slug}/search`, `POST /workspaces/{slug}/ask`, `POST /workspaces/{slug}/questions/{id}/rating`.
 
+## AI cost tracking
+
+Every model call (tagging, embedding, answering) is logged to the `ai_calls` table with its token usage and latency. The usage dashboard at http://localhost:3000/workspaces/demo/usage shows:
+
+- **Lifetime totals** — calls, items processed, tokens consumed, estimated USD cost.
+- **Per-feature breakdown** — how many tokens tagging, embedding and answering each consume, with average latency.
+- **Daily chart** — tokens per day for the last 30 days, so spikes are visible at a glance.
+
+The cost estimate uses published Gemini Flash-Lite pricing and is meant as an indicator, not an invoice. No new data collection is needed; the tracking was built into the AI modules from the start.
+
+Endpoint: `GET /workspaces/{slug}/ai/usage?days=30`.
+
 ## Measuring tagging accuracy
 
 AI labels are only worth trusting if we know how often they are right, so FeedbackLens keeps a **checked set** of correct answers and scores the AI against it.
@@ -258,6 +270,6 @@ The same checks run in GitHub Actions on every push and pull request.
 - Phase 5:
   - [x] accounts, workspaces and roles
   - [ ] embeddable feedback widget
-  - [ ] AI cost tracking
+  - [x] AI cost tracking
   - [ ] evaluation suite in CI
   - [ ] deployment and public demo

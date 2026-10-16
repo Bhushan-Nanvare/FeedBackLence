@@ -14,6 +14,7 @@ from app.api import (
     tagging,
     themes,
     tickets,
+    usage,
     workspaces,
 )
 from app.api.deps import SessionDep
@@ -39,6 +40,7 @@ app.include_router(search.router)
 app.include_router(ask.router)
 app.include_router(alerts.router)
 app.include_router(tickets.router)
+app.include_router(usage.router)
 
 
 @app.get("/health")

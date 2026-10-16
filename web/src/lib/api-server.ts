@@ -46,3 +46,8 @@ export async function getAlerts(slug: string, limit = 5) {
 export async function getMembers(slug: string) {
   return api.getMembers(slug, await sessionToken());
 }
+
+/** Server-side wrapper: reads the cookie and fetches AI usage for the workspace. */
+export async function getUsage(slug: string, days = 30) {
+  return api.getUsage(slug, days, await sessionToken());
+}

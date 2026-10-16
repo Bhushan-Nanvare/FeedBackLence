@@ -375,3 +375,60 @@ class JobRead(BaseModel):
     last_error: str | None
     created_at: datetime
     updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# AI cost tracking — aggregations over the ai_calls table.
+# The raw data is already recorded by the tagging, embedding and answering
+# modules (see app.ai.*); these schemas are purely for the read side.
+# ---------------------------------------------------------------------------
+
+
+class FeatureUsage(BaseModel):
+    """Token and call totals for one AI feature (e.g. "tagging", "embedding", "ask")."""
+
+    feature: str
+    # How many times this feature called the model.
+    total_calls: int
+    # How many of those calls succeeded (the rest failed or errored).
+    succeeded_calls: int
+    # How many feedback items were processed across all calls.
+    total_items: int
+    # Raw token counts, straight from the model's usage metadata.
+    input_tokens: int
+    output_tokens: int
+    # Average round-trip time to the model, in milliseconds.
+    avg_latency_ms: float
+
+
+class DailyUsage(BaseModel):
+    """Token and call totals for one calendar day, across all features."""
+
+    date: date
+    total_calls: int
+    succeeded_calls: int
+    input_tokens: int
+    output_tokens: int
+
+
+class UsageSummary(BaseModel):
+    """Everything the cost-tracking page needs in a single response.
+
+    The estimated_cost_usd field is a rough number based on published Gemini
+    pricing; it is meant to give a quick feel, not a billing-grade total.
+    """
+
+    # Lifetime totals for the whole workspace.
+    total_calls: int
+    succeeded_calls: int
+    total_items: int
+    input_tokens: int
+    output_tokens: int
+    # Sum of input + output, since dashboards almost always show this.
+    total_tokens: int
+    # A rough USD estimate: (input_tokens * input_price + output_tokens * output_price).
+    estimated_cost_usd: float
+    # Broken down by feature ("tagging", "embedding", "ask").
+    by_feature: list[FeatureUsage]
+    # Broken down by calendar day, most recent first, last 30 days.
+    daily: list[DailyUsage]
