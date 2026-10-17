@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
@@ -15,6 +18,7 @@ from app.api import (
     themes,
     tickets,
     usage,
+    widget,
     workspaces,
 )
 from app.api.deps import SessionDep
@@ -41,6 +45,12 @@ app.include_router(ask.router)
 app.include_router(alerts.router)
 app.include_router(tickets.router)
 app.include_router(usage.router)
+app.include_router(widget.router)
+
+# Serve the embeddable widget JS from /static/widget.js.  The static
+# directory lives next to this file at app/static/.
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 @app.get("/health")

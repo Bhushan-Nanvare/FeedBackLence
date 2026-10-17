@@ -51,3 +51,8 @@ export async function getMembers(slug: string) {
 export async function getUsage(slug: string, days = 30) {
   return api.getUsage(slug, days, await sessionToken());
 }
+
+/** Server-side wrapper: reads the cookie and fetches the widget embed snippet. */
+export async function getWidgetEmbed(slug: string) {
+  return api.getWidgetEmbed(slug, await sessionToken());
+}

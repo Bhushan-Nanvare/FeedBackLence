@@ -1,9 +1,21 @@
 import Link from "next/link";
 
+import type { WidgetEmbed } from "@/lib/api";
+import { getWidgetEmbed } from "@/lib/api-server";
+
 import { ImportForm } from "./import-form";
 
 export default async function ImportPage(props: PageProps<"/workspaces/[slug]/import">) {
   const { slug } = await props.params;
+
+  // Fetch the widget embed snippet — this can fail if the user is not
+  // authenticated, so we catch and show nothing rather than crashing.
+  let embed: WidgetEmbed | null = null;
+  try {
+    embed = await getWidgetEmbed(slug);
+  } catch {
+    // Not critical — the CSV section still works.
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
@@ -11,16 +23,17 @@ export default async function ImportPage(props: PageProps<"/workspaces/[slug]/im
         <Link href="/" className="text-sm text-zinc-500 underline-offset-4 hover:underline">
           ← FeedbackLens
         </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">Import a CSV</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Import feedback</h1>
         <p className="text-sm text-zinc-500">
-          Bring feedback from a support tool or spreadsheet into workspace {slug}.
+          Bring feedback into workspace {slug} via CSV upload or the embeddable widget.
         </p>
       </header>
 
+      {/* ---- CSV import section (unchanged) ---- */}
       <ImportForm slug={slug} />
 
       <section className="flex flex-col gap-2 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
-        <h2 className="font-medium">What the file needs</h2>
+        <h2 className="font-medium">What the CSV file needs</h2>
         <ul className="flex list-disc flex-col gap-1 pl-5 text-zinc-600 dark:text-zinc-400">
           <li>
             One column with the feedback itself, named{" "}
@@ -46,6 +59,32 @@ export default async function ImportPage(props: PageProps<"/workspaces/[slug]/im
           </li>
         </ul>
       </section>
+
+      {/* ---- Embeddable widget section ---- */}
+      {embed && (
+        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
+          <h2 className="text-lg font-medium">Embeddable feedback widget</h2>
+          <p className="text-zinc-600 dark:text-zinc-400">
+            Paste this snippet into your website&apos;s HTML to show a floating &quot;Feedback&quot;
+            button. Visitors can submit feedback without signing in — emails and phone numbers are
+            scrubbed automatically.
+          </p>
+          <pre className="overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900">
+            {embed.snippet}
+          </pre>
+          <div className="flex flex-col gap-1 text-xs text-zinc-500">
+            <p>
+              <strong>Script URL:</strong> {embed.script_url}
+            </p>
+            <p>
+              <strong>API URL:</strong> {embed.api_url}
+            </p>
+            <p>
+              <strong>Workspace:</strong> {embed.workspace_slug}
+            </p>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

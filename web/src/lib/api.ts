@@ -206,6 +206,14 @@ export type UsageSummary = {
   daily: DailyUsage[];
 };
 
+/** The embed snippet and config returned by GET /widget/embed. */
+export type WidgetEmbed = {
+  script_url: string;
+  workspace_slug: string;
+  api_url: string;
+  snippet: string;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -386,6 +394,14 @@ export async function getUsage(
   token?: string | null,
 ): Promise<UsageSummary> {
   return request<UsageSummary>(`/workspaces/${slug}/ai/usage?days=${days}`, undefined, token);
+}
+
+/** Fetch the widget embed snippet for a workspace. */
+export async function getWidgetEmbed(
+  slug: string,
+  token?: string | null,
+): Promise<WidgetEmbed> {
+  return request<WidgetEmbed>(`/workspaces/${slug}/widget/embed`, undefined, token);
 }
 
 export async function rateAnswer(

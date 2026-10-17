@@ -220,6 +220,20 @@ The cost estimate uses published Gemini Flash-Lite pricing and is meant as an in
 
 Endpoint: `GET /workspaces/{slug}/ai/usage?days=30`.
 
+## Embeddable feedback widget
+
+Let visitors submit feedback directly from your website. Paste a single `<script>` tag and a floating "Feedback" button appears in the bottom-right corner.
+
+**How it works:**
+
+1. Go to the import page for your workspace (e.g. http://localhost:3000/workspaces/demo/import).
+2. Copy the embed snippet shown under "Embeddable feedback widget".
+3. Paste it into your site's HTML, just before `</body>`.
+
+The widget is self-contained (no dependencies, no build step) and uses Shadow DOM so it cannot clash with your site's styles. Submissions go through the same PII scrubbing pipeline as CSV imports — emails and phone numbers are removed before anything is stored. Tagging and embedding jobs are queued automatically.
+
+Endpoints: `POST /workspaces/{slug}/widget/submit` (public, no auth), `GET /workspaces/{slug}/widget/embed`.
+
 ## Measuring tagging accuracy
 
 AI labels are only worth trusting if we know how often they are right, so FeedbackLens keeps a **checked set** of correct answers and scores the AI against it.
@@ -269,7 +283,7 @@ The same checks run in GitHub Actions on every push and pull request.
 - [x] Phase 4: trend alerts, theme to ticket, CSV import
 - Phase 5:
   - [x] accounts, workspaces and roles
-  - [ ] embeddable feedback widget
+  - [x] embeddable feedback widget
   - [x] AI cost tracking
   - [ ] evaluation suite in CI
   - [ ] deployment and public demo

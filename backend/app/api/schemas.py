@@ -267,6 +267,46 @@ class CsvImportResult(BaseModel):
     problems: list[str]
 
 
+# ---------------------------------------------------------------------------
+# Embeddable feedback widget — accepts user feedback from external sites.
+# The widget is a small JS snippet that posts to POST /widget/submit.
+# ---------------------------------------------------------------------------
+
+
+class WidgetSubmission(BaseModel):
+    """One piece of feedback sent by the embeddable widget.
+
+    Only ``text`` is required.  The optional ``email`` and ``name`` let the
+    submitter identify themselves, but they are scrubbed before storage so
+    PII never reaches the database or an AI model.
+    """
+
+    text: str = Field(min_length=3, max_length=5000, examples=["The search is too slow"])
+    # Optional — the submitter may choose to stay anonymous.
+    email: str | None = Field(default=None, max_length=320)
+    name: str | None = Field(default=None, max_length=120)
+
+
+class WidgetSubmissionResult(BaseModel):
+    """Returned after a widget submission is accepted."""
+
+    item_id: int
+    message: str = "Thank you for your feedback!"
+
+
+class WidgetEmbed(BaseModel):
+    """The embed snippet and configuration shown to workspace admins."""
+
+    # The URL of the widget JS file to include in a script tag.
+    script_url: str
+    # The workspace slug the widget submits to.
+    workspace_slug: str
+    # The API base URL the widget will POST to.
+    api_url: str
+    # A ready-to-paste HTML snippet.
+    snippet: str
+
+
 class TicketDraftRequest(BaseModel):
     repo: str | None = Field(default=None, pattern=GITHUB_REPO_PATTERN)
     check_duplicates: bool = True
