@@ -214,6 +214,38 @@ export type WidgetEmbed = {
   snippet: string;
 };
 
+/** Precision, recall and F1 for one label value (e.g. "bug"). */
+export type ClassScore = {
+  expected: number;
+  predicted: number;
+  correct: number;
+  precision: number;
+  recall: number;
+  f1: number;
+};
+
+/** Accuracy and per-class scores for one tagging field (e.g. "type" or "area"). */
+export type FieldScore = {
+  compared: number;
+  correct: number;
+  accuracy: number;
+  macro_f1: number;
+  per_class: Record<string, ClassScore>;
+  mistakes: (string | number)[][];
+};
+
+/** The full evaluation report from GET /workspaces/{slug}/evals. */
+export type EvalReport = {
+  workspace: string;
+  model: string | null;
+  prompt_version: string | null;
+  labelled_items: number;
+  checked_by_people: number;
+  scored_items: number;
+  skipped_corrected: number;
+  fields: Record<string, FieldScore>;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -402,6 +434,14 @@ export async function getWidgetEmbed(
   token?: string | null,
 ): Promise<WidgetEmbed> {
   return request<WidgetEmbed>(`/workspaces/${slug}/widget/embed`, undefined, token);
+}
+
+/** Fetch the evaluation report (accuracy vs checked labels) for a workspace. */
+export async function getEvalReport(
+  slug: string,
+  token?: string | null,
+): Promise<EvalReport> {
+  return request<EvalReport>(`/workspaces/${slug}/evals`, undefined, token);
 }
 
 export async function rateAnswer(

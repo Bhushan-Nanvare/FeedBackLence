@@ -10,6 +10,7 @@ from app.api import (
     alerts,
     ask,
     auth,
+    evals,
     items,
     jobs,
     search,
@@ -46,6 +47,7 @@ app.include_router(alerts.router)
 app.include_router(tickets.router)
 app.include_router(usage.router)
 app.include_router(widget.router)
+app.include_router(evals.router)
 
 # Serve the embeddable widget JS from /static/widget.js.  The static
 # directory lives next to this file at app/static/.

@@ -249,7 +249,33 @@ uv run python -m app.evals score --workspace demo
 - **Corrections you make in the inbox replace the drafts** and are never overwritten by a later draft run.
 - **Items you corrected are left out of the score**, since a corrected tag matches the answer by definition and would flatter the model.
 - The report shows accuracy, precision, recall and F1 for each label, macro F1, and the most common mistakes.
-- `--json` saves the report, `--save-baseline` stores it as the reference, and `--baseline evals/baseline.json --max-drop 3` fails when a score falls more than 3 points. That is how this will run in CI in Phase 5; today it runs locally, because scoring needs a database with real tags.
+- `--json` saves the report, `--save-baseline` stores it as the reference, and `--baseline evals/baselines/demo.json --max-drop 3` fails when a score falls more than 3 points.
+
+### CI integration
+
+The GitHub Actions CI workflow runs the eval scorer after tests pass:
+
+```yaml
+- name: Eval regression check
+  run: |
+    uv run python -m app.evals score \
+      --workspace demo \
+      --baseline ../../evals/baselines/demo.json \
+      --max-drop 3.0
+```
+
+If any accuracy or macro F1 score drops more than 3 points compared to the saved baseline, the CI step fails and blocks the PR.
+
+To update the baseline after intentional prompt changes:
+
+```bash
+cd backend
+uv run python -m app.evals score --workspace demo --save-baseline ../evals/baselines/demo.json
+```
+
+### Dashboard
+
+View the eval report in the browser at `/workspaces/{slug}/evals`, or fetch it via `GET /workspaces/{slug}/evals`.
 
 ## Checks
 
@@ -285,5 +311,5 @@ The same checks run in GitHub Actions on every push and pull request.
   - [x] accounts, workspaces and roles
   - [x] embeddable feedback widget
   - [x] AI cost tracking
-  - [ ] evaluation suite in CI
+  - [x] evaluation suite in CI
   - [ ] deployment and public demo

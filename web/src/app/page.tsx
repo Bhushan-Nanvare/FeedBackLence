@@ -143,6 +143,12 @@ function YourWorkspaces({ user }: { user: AuthUser }) {
                 >
                   usage
                 </Link>
+                <Link
+                  href={`/workspaces/${workspace.slug}/evals`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  evals
+                </Link>
               </span>
             </li>
           ))}

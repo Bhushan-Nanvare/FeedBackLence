@@ -56,3 +56,8 @@ export async function getUsage(slug: string, days = 30) {
 export async function getWidgetEmbed(slug: string) {
   return api.getWidgetEmbed(slug, await sessionToken());
 }
+
+/** Server-side wrapper: reads the cookie and fetches the eval report. */
+export async function getEvalReport(slug: string) {
+  return api.getEvalReport(slug, await sessionToken());
+}

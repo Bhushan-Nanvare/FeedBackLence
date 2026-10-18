@@ -472,3 +472,51 @@ class UsageSummary(BaseModel):
     by_feature: list[FeatureUsage]
     # Broken down by calendar day, most recent first, last 30 days.
     daily: list[DailyUsage]
+
+
+# ---------------------------------------------------------------------------
+# Evaluation report — mirrors the dataclasses in app.evals.scoring but as
+# Pydantic models for the REST response.  The eval system scores AI tags
+# against human-checked labels and reports accuracy per field.
+# ---------------------------------------------------------------------------
+
+
+class ClassScoreRead(BaseModel):
+    """Precision, recall and F1 for a single label value (e.g. "bug" or "terminal")."""
+
+    expected: int
+    predicted: int
+    correct: int
+    precision: float
+    recall: float
+    f1: float
+
+
+class FieldScoreRead(BaseModel):
+    """Accuracy and per-class scores for one tagging field (e.g. "type" or "area")."""
+
+    compared: int
+    correct: int
+    accuracy: float
+    macro_f1: float
+    # Per-class breakdown: label name → scores.
+    per_class: dict[str, ClassScoreRead]
+    # Most common mistakes: list of [expected, predicted, count].
+    mistakes: list[list[str | int]]
+
+
+class EvalReportRead(BaseModel):
+    """The full evaluation report for one workspace.
+
+    This is what the frontend displays on the /evals page.
+    """
+
+    workspace: str
+    model: str | None
+    prompt_version: str | None
+    labelled_items: int
+    checked_by_people: int
+    scored_items: int
+    skipped_corrected: int
+    # One entry per tagging field: "type" and "area".
+    fields: dict[str, FieldScoreRead]

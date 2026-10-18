@@ -1,0 +1,27 @@
+{
+  "workspace": "demo",
+  "model": null,
+  "prompt_version": null,
+  "labelled_items": 0,
+  "checked_by_people": 0,
+  "scored_items": 0,
+  "skipped_corrected": 0,
+  "fields": {
+    "type": {
+      "compared": 0,
+      "correct": 0,
+      "accuracy": 0.0,
+      "macro_f1": 0.0,
+      "per_class": {},
+      "mistakes": []
+    },
+    "area": {
+      "compared": 0,
+      "correct": 0,
+      "accuracy": 0.0,
+      "macro_f1": 0.0,
+      "per_class": {},
+      "mistakes": []
+    }
+  }
+}
