@@ -325,6 +325,26 @@ export async function getProductAreas(
   return request<ProductArea[]>(`/workspaces/${slug}/product-areas`, undefined, token);
 }
 
+/** Replace the workspace's product areas with a new list (PUT /product-areas). */
+export async function replaceProductAreas(
+  slug: string,
+  areas: { slug: string; name: string; description: string }[],
+): Promise<ProductArea[]> {
+  return request<ProductArea[]>(`/workspaces/${slug}/product-areas`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(areas),
+  });
+}
+
+/** Remove someone from a workspace (DELETE /members/{email}). */
+export async function removeMember(slug: string, email: string): Promise<void> {
+  await request(`/workspaces/${slug}/members/${encodeURIComponent(email)}`, {
+    method: "DELETE",
+  });
+}
+
+
 export async function correctItemTag(
   slug: string,
   itemId: number,

@@ -81,3 +81,34 @@ def add_member(
         membership.role = body.role
     session.commit()
     return MemberRead(email=invited.email, name=invited.name, role=membership.role)
+
+
+@router.delete(
+    "/workspaces/{slug}/members/{email}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_member(
+    email: str, workspace: ManagedWorkspaceDep, session: SessionDep
+) -> None:
+    """Remove a member from the workspace. Owners cannot remove themselves."""
+    target = session.scalar(select(User).where(User.email == email.strip().lower()))
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    membership = session.scalar(
+        select(Membership).where(
+            Membership.workspace_id == workspace.id, Membership.user_id == target.id
+        )
+    )
+    if membership is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That person is not a member")
+
+    if membership.role == "owner":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Cannot remove the owner — transfer ownership first",
+        )
+
+    session.delete(membership)
+    session.commit()
+

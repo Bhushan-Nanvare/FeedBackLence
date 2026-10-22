@@ -277,6 +277,82 @@ uv run python -m app.evals score --workspace demo --save-baseline ../evals/basel
 
 View the eval report in the browser at `/workspaces/{slug}/evals`, or fetch it via `GET /workspaces/{slug}/evals`.
 
+## Deployment
+
+The project ships production-ready Docker images for the backend (FastAPI + uvicorn) and frontend (Next.js standalone).
+
+### Build images
+
+```bash
+# Build both images
+make build
+
+# Or individually
+docker build -t feedbacklens-api backend/
+docker build -t feedbacklens-web web/
+```
+
+### Start the full stack
+
+Copy `.env.example` to `.env` and set the required variables:
+
+```bash
+cp .env.example .env
+# Edit .env:
+#   POSTGRES_PASSWORD=...  (required — change from default!)
+#   AUTH_SECRET_KEY=...    (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
+#   GEMINI_API_KEY=...
+```
+
+Then start all four services (database, API, worker, web):
+
+```bash
+make up
+# or:
+docker compose -f docker-compose.production.yml up -d
+```
+
+The API is available at http://localhost:8000 and the web app at http://localhost:3000.
+
+### Useful Makefile commands
+
+| Command | What it does |
+| --- | --- |
+| `make up` | Start the production stack |
+| `make down` | Stop and remove all containers |
+| `make logs` | Tail all container logs |
+| `make logs-api` | Tail API logs only |
+| `make migrate` | Run Alembic migrations via the running api container |
+| `make shell-api` | Open a shell inside the API container |
+| `make shell-db` | Open a psql shell inside the database container |
+| `make build` | Build both Docker images |
+| `make test` | Run backend tests |
+| `make lint` | Run ruff + eslint |
+| `make evals` | Score AI tags against the demo baseline |
+| `make baseline` | Save current scores as the new baseline |
+
+### How the API container starts
+
+The entrypoint script (`backend/docker-entrypoint.sh`) runs `alembic upgrade head` before starting uvicorn, so migrations are applied automatically on every deploy. To run the background worker instead:
+
+```bash
+docker compose -f docker-compose.production.yml run --rm worker
+```
+
+### Environment variables
+
+All configuration is via environment variables. See `.env.example` for the full list. The minimum set for production:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `POSTGRES_PASSWORD` | ✅ | Change from the default |
+| `AUTH_SECRET_KEY` | ✅ | Random 32-byte hex, generated once |
+| `GEMINI_API_KEY` | ✅ | For tagging, embeddings and answers |
+| `PUBLIC_WEB_URL` | optional | Public base URL, e.g. `https://feedbacklens.example.com` |
+| `GITHUB_TOKEN` | optional | Raises GitHub API rate limit to 5,000/hour |
+| `SLACK_WEBHOOK_URL` | optional | Sends trend alerts to Slack |
+| `TICKET_REPO` | optional | GitHub repository to file tickets into |
+
 ## Checks
 
 Backend:
@@ -312,4 +388,26 @@ The same checks run in GitHub Actions on every push and pull request.
   - [x] embeddable feedback widget
   - [x] AI cost tracking
   - [x] evaluation suite in CI
-  - [ ] deployment and public demo
+  - [x] deployment and public demo
+- [x] Phase 6: theme detail page and workspace settings
+
+## Theme detail
+
+Visit `/workspaces/{slug}/themes/{id}` to see a single theme in depth:
+
+- Full weekly sparkline and growth badge
+- Top 20 feedback items with AI tags (type, area, sentiment, urgency)
+- Inline rename (saved immediately to the API)
+- Ignore / restore toggle
+- Draft-ticket button (drafts a GitHub issue with quotes from the items)
+
+## Workspace settings
+
+Visit `/workspaces/{slug}/settings` to manage a workspace:
+
+- Members list with role badges; owners and admins can remove members
+- Invite form — adds anyone who already has an account
+- Product areas editor — add, edit and remove areas used for AI classification
+- Quick links to all workspace pages
+
+The settings page is read-only for viewers and members; only owners and admins see the edit controls.
