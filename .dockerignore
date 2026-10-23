@@ -1,0 +1,40 @@
+# Root .dockerignore — prevents the Docker daemon from sending junk to the build context.
+# Individual Dockerfiles are in backend/ and web/; each has its own .dockerignore.
+
+# Version control
+.git/
+.gitignore
+
+# Local environment (never copy secrets into images)
+.env
+.env.*
+!.env.example
+
+# Editor / OS artefacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# AI assistant config
+.claude/
+.gemini/
+.agents/
+
+# Docker artefacts (avoid recursive includes)
+docker-compose.production.yml
+
+# CI
+.github/
+
+# Docs / eval baselines (not needed at runtime)
+README.md
+evals/
+
+# Both build dirs (only relevant half is copied by each Dockerfile)
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.ruff_cache/
+web/node_modules/
+web/.next/

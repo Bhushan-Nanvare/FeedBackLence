@@ -47,8 +47,14 @@ def _add_item_tag(
     """Insert an AI-generated tag for an item."""
     tag = ItemTag(
         item_id=item.id,
+        workspace_id=item.workspace_id,
         type=tag_type,
         area=area,
+        sentiment="negative",
+        urgency="medium",
+        confidence=0.9,
+        summary=item.title,
+        content_hash=item.content_hash,
         model="test-model",
         prompt_version="v1",
         reviewed_by_human=reviewed_by_human,

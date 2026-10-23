@@ -1,0 +1,127 @@
+# ============================================================================
+# docker-compose.production.yml — full FeedbackLens stack
+#
+# Runs all four services:
+#   db      — PostgreSQL + pgvector
+#   api     — FastAPI backend (uvicorn, 2 workers)
+#   worker  — background job processor (imports, tagging, embeddings)
+#   web     — Next.js frontend (standalone server)
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#   docker compose -f docker-compose.production.yml logs -f api
+#
+# Required environment variables (set in .env or your CI/CD secrets):
+#   POSTGRES_PASSWORD   — database password (change from default!)
+#   AUTH_SECRET_KEY     — signs JWT tokens; generate once with:
+#                           python -c "import secrets; print(secrets.token_urlsafe(32))"
+#   GEMINI_API_KEY      — Gemini AI key from https://aistudio.google.com/apikey
+#
+# Optional (sensible defaults are set below):
+#   POSTGRES_USER, POSTGRES_DB
+#   GEMINI_MODEL, GEMINI_REQUESTS_PER_MINUTE
+#   EMBEDDING_PROVIDER (local | gemini) — gemini here, see the api service
+#   GITHUB_TOKEN, TICKET_REPO
+#   SLACK_WEBHOOK_URL
+#   PUBLIC_WEB_URL — where the web app is reachable; the API allows it through CORS
+#   PUBLIC_API_URL — where the API is reachable; the browser bundle is built with it,
+#                    so changing it needs `docker compose ... build web`
+# ============================================================================
+
+# Its own project name, so this stack never shares the development database's
+# container or volume. Starting it does not touch what `docker compose up` holds.
+name: feedbacklens-prod
+
+services:
+
+  # ---------- database ----------
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: feedbacklens-prod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-feedbacklens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-feedbacklens}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # The database port is NOT exposed to the host in production.
+    # Only the api and worker containers connect to it on the internal network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-feedbacklens} -d ${POSTGRES_DB:-feedbacklens}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------- API ----------
+  api:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    container_name: feedbacklens-prod-api
+    restart: unless-stopped
+    command: api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-feedbacklens}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-feedbacklens}
+      CORS_ORIGINS: '["${PUBLIC_WEB_URL:-http://localhost:3000}"]'
+      # The image does not carry the local embedding model, so embeddings come
+      # from Gemini here. Build with --extra local-embeddings to change that.
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ---------- background worker ----------
+  worker:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    container_name: feedbacklens-prod-worker
+    restart: unless-stopped
+    command: worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-feedbacklens}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-feedbacklens}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  # ---------- frontend ----------
+  web:
+    build:
+      context: web
+      dockerfile: Dockerfile
+      args:
+        # Baked into the browser bundle at build time, so changing it means
+        # rebuilding this image, not just restarting it.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+    container_name: feedbacklens-prod-web
+    restart: unless-stopped
+    environment:
+      # Pages are rendered inside this container, where the API is reachable over
+      # the compose network rather than at its public address.
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  pgdata:
+    driver: local

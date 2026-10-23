@@ -1,24 +1,27 @@
 """Widget API endpoints.
 
-Two endpoints:
+Three endpoints:
 
 1. ``POST /workspaces/{slug}/widget/submit`` — accepts feedback from the
    embeddable widget.  This is **unauthenticated** because external visitors
-   need to be able to submit feedback without signing in.  Only workspaces
-   that exist receive submissions (404 otherwise).
+   need to be able to submit feedback without signing in.  It is accepted
+   only by workspaces that turned the widget on, so nobody can push feedback
+   into a private workspace by guessing its name.
 
-2. ``GET /workspaces/{slug}/widget/embed`` — returns the embed snippet and
-   configuration.  This is a read endpoint so ``ReadableWorkspaceDep`` is
-   enough (any member or public reader can see the snippet).
+2. ``GET /workspaces/{slug}/widget/embed`` — the snippet to paste, and whether
+   the widget is currently on.  Owners and admins only: it decides whether
+   strangers may write to the workspace.
+
+3. ``POST /workspaces/{slug}/widget/enable`` — turns the widget on or off.
 """
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
-from app.api.deps import ReadableWorkspaceDep, SessionDep
-from app.api.schemas import WidgetEmbed, WidgetSubmission, WidgetSubmissionResult
+from app.api.deps import ManagedWorkspaceDep, SessionDep
+from app.api.schemas import WidgetEmbed, WidgetSubmission, WidgetSubmissionResult, WidgetToggle
 from app.models import Workspace
-from app.sources.widget import submit_feedback
+from app.sources.widget import set_widget_enabled, submit_feedback, widget_is_on, widget_source
 
 router = APIRouter(prefix="/workspaces/{slug}/widget", tags=["widget"])
 
@@ -45,10 +48,19 @@ def widget_submit(
     if workspace is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
 
+    # -- A workspace only receives widget feedback once someone turned the widget
+    #    on. Same answer as an unknown workspace, so this cannot be used to
+    #    discover which workspaces exist.
+    source = widget_source(session, workspace)
+    if not widget_is_on(source):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
+    assert source is not None  # widget_is_on already proved this
+
     # -- Create the feedback item and queue AI processing.
     item = submit_feedback(
         session,
         workspace,
+        source,
         text=body.text,
         email=body.email,
         name=body.name,
@@ -60,15 +72,33 @@ def widget_submit(
 
 @router.get("/embed", response_model=WidgetEmbed)
 def widget_embed(
-    workspace: ReadableWorkspaceDep,
+    workspace: ManagedWorkspaceDep,
+    session: SessionDep,
     request: Request,
 ) -> WidgetEmbed:
-    """Return the embed snippet for this workspace.
+    """Return the embed snippet for this workspace, and whether it is switched on.
 
     The snippet is a ``<script>`` tag that loads the widget JS file and
     configures it with the workspace slug and API URL.  Workspace admins
     paste this into their website's HTML.
     """
+    return _embed(workspace, request, enabled=widget_is_on(widget_source(session, workspace)))
+
+
+@router.post("/enable", response_model=WidgetEmbed)
+def widget_enable(
+    body: WidgetToggle,
+    workspace: ManagedWorkspaceDep,
+    session: SessionDep,
+    request: Request,
+) -> WidgetEmbed:
+    """Turn public submissions on or off. Feedback already collected is kept either way."""
+    set_widget_enabled(session, workspace, body.enabled)
+    session.commit()
+    return _embed(workspace, request, enabled=body.enabled)
+
+
+def _embed(workspace: Workspace, request: Request, *, enabled: bool) -> WidgetEmbed:
     # -- Build the API base URL from the current request so it works in both
     #    local development (http://localhost:8000) and production.
     api_url = str(request.base_url).rstrip("/")
@@ -88,4 +118,5 @@ def widget_embed(
         workspace_slug=workspace.slug,
         api_url=api_url,
         snippet=snippet,
+        enabled=enabled,
     )

@@ -1,11 +1,30 @@
 import Link from "next/link";
 
+import { LoadProblem } from "@/components/load-problem";
 import type { EvalReport, FieldScore } from "@/lib/api";
 import { getEvalReport } from "@/lib/api-server";
 
 export default async function EvalsPage(props: PageProps<"/workspaces/[slug]/evals">) {
   const { slug } = await props.params;
-  const report = await getEvalReport(slug);
+
+  let report: EvalReport | null = null;
+  let problem: unknown = null;
+  try {
+    report = await getEvalReport(slug);
+  } catch (error) {
+    problem = error;
+  }
+
+  if (report === null) {
+    return (
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
+        <Link href="/" className="text-sm text-zinc-500 underline-offset-4 hover:underline">
+          ← FeedbackLens
+        </Link>
+        <LoadProblem error={problem} next={`/workspaces/${slug}/evals`} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-12">
@@ -45,13 +64,19 @@ export default async function EvalsPage(props: PageProps<"/workspaces/[slug]/eva
           <p className="mb-2 text-lg font-medium text-zinc-700 dark:text-zinc-300">
             No items scored yet
           </p>
-          <p>
-            Run{" "}
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs dark:bg-zinc-800">
-              python -m app.evals build --workspace {slug}
-            </code>{" "}
-            to draft checked labels, then review them in the inbox.
-          </p>
+          {report.labelled_items === 0 ? (
+            <p>
+              There is nothing to score against. Run{" "}
+              <Command>python -m app.evals build --workspace {slug}</Command> to draft checked
+              labels from the source labels, then review them in the inbox.
+            </p>
+          ) : (
+            <p>
+              There are {report.labelled_items.toLocaleString()} checked labels, but no AI tags to
+              compare them with yet. Set <Command>GEMINI_API_KEY</Command>, then run the worker or{" "}
+              <Command>POST /workspaces/{slug}/tagging/run</Command>.
+            </p>
+          )}
         </div>
       )}
     </main>
@@ -59,6 +84,14 @@ export default async function EvalsPage(props: PageProps<"/workspaces/[slug]/eva
 }
 
 /* ---- Reusable components ---- */
+
+function Command({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs dark:bg-zinc-800">
+      {children}
+    </code>
+  );
+}
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (

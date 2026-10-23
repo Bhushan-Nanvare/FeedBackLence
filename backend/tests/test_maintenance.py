@@ -1,9 +1,11 @@
 from collections.abc import Callable
 
+import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.maintenance import reclean_items
-from app.models import FeedbackItem, Workspace
+from app.maintenance import grant_role, reclean_items
+from app.models import FeedbackItem, Membership, User, Workspace
 
 MakeItem = Callable[..., FeedbackItem]
 
@@ -49,3 +51,31 @@ def test_already_clean_items_are_left_alone(
     stats = reclean_items(db, workspace.id)
 
     assert (stats.checked, stats.changed) == (1, 0)
+
+
+def test_granting_a_role_to_a_workspace_nobody_owns(
+    db: Session, workspace: Workspace, owner: User
+) -> None:
+    """How a fresh database gets its first owner, since the web app cannot do it."""
+    db.query(Membership).delete()
+    db.commit()
+
+    said = grant_role(db, workspace, "OWNER@example.com", "owner")
+
+    assert "is now owner" in said
+    role = db.scalar(select(Membership.role).where(Membership.user_id == owner.id))
+    assert role == "owner"
+
+
+def test_granting_changes_an_existing_role(db: Session, workspace: Workspace, owner: User) -> None:
+    said = grant_role(db, workspace, owner.email, "viewer")
+
+    assert "changed from owner to viewer" in said
+    assert db.scalar(select(Membership.role).where(Membership.user_id == owner.id)) == "viewer"
+    # Granting the same role twice is not an error.
+    assert "already viewer" in grant_role(db, workspace, owner.email, "viewer")
+
+
+def test_granting_to_an_unregistered_address_says_so(db: Session, workspace: Workspace) -> None:
+    with pytest.raises(LookupError, match="Sign up first"):
+        grant_role(db, workspace, "nobody@example.com", "owner")

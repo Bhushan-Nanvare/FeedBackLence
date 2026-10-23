@@ -93,12 +93,27 @@ function ItemRow({ item }: { item: FeedbackItem }) {
       {item.tag?.summary && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">{item.tag.summary}</p>
       )}
+      {item.tag && (
+        <div className="flex flex-wrap gap-1">
+          <Tag label={item.tag.type.replace(/_/g, " ")} />
+          {item.tag.area !== "other" && <Tag label={item.tag.area} />}
+          <Tag label={item.tag.sentiment} />
+          {item.tag.urgency !== "low" && <Tag label={item.tag.urgency} urgent />}
+        </div>
+      )}
       <p className="text-xs text-zinc-500">
         #{item.external_id} · {formatDate(item.external_created_at)} · {item.state} ·{" "}
         {item.reactions_count} reactions
       </p>
     </article>
   );
+}
+
+function Tag({ label, urgent = false }: { label: string; urgent?: boolean }) {
+  const style = urgent
+    ? "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400";
+  return <span className={`rounded px-1.5 py-0.5 text-xs ${style}`}>{label}</span>;
 }
 
 function formatDate(value: string): string {

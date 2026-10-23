@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import * as api from "@/lib/api";
@@ -9,6 +10,7 @@ import * as api from "@/lib/api";
 // ---------------------------------------------------------------------------
 
 export function InviteForm({ slug }: { slug: string }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member" | "viewer">("member");
   const [result, setResult] = useState<api.Member | null>(null);
@@ -24,6 +26,8 @@ export function InviteForm({ slug }: { slug: string }) {
         setResult(member);
         setEmail("");
         setError(null);
+        // So the new person appears in the list above without a reload.
+        router.refresh();
       } catch (err) {
         setError(err instanceof api.ApiError ? err.message : "Invite failed");
         setResult(null);
@@ -82,6 +86,7 @@ export function RemoveMemberButton({
   email: string;
   name: string;
 }) {
+  const router = useRouter();
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -97,6 +102,7 @@ export function RemoveMemberButton({
         await api.removeMember(slug, email);
         setDone(true);
         setError(null);
+        router.refresh();
       } catch (err) {
         setError(err instanceof api.ApiError ? err.message : "Remove failed");
       }

@@ -217,3 +217,46 @@ def test_only_owners_and_admins_see_the_member_list(
 
     assert client.get("/workspaces/test/members").status_code == 200
     assert member.get("/workspaces/test/members").status_code == 403
+
+
+def test_removing_a_member_takes_their_access_away(
+    client: TestClient, db: Session, workspace: Workspace
+) -> None:
+    member = sign_in_as(client, workspace, db, "member")
+    assert member.get("/workspaces/test/items").status_code == 200
+
+    removed = client.delete("/workspaces/test/members/member@example.com")
+
+    assert removed.status_code == 204
+    assert member.get("/workspaces/test/items").status_code == 403
+    assert db.scalars(select(Membership).where(Membership.role == "member")).all() == []
+
+
+def test_a_member_cannot_remove_anyone(
+    client: TestClient, db: Session, workspace: Workspace
+) -> None:
+    member = sign_in_as(client, workspace, db, "member")
+    sign_in_as(client, workspace, db, "viewer")
+
+    assert member.delete("/workspaces/test/members/viewer@example.com").status_code == 403
+
+
+def test_the_owner_cannot_be_removed(client: TestClient, workspace: Workspace, owner: User) -> None:
+    """Otherwise a workspace could be left with nobody able to manage it."""
+    response = client.delete(f"/workspaces/test/members/{owner.email}")
+
+    assert response.status_code == 422
+    assert "ownership" in response.json()["detail"]
+    assert client.get("/workspaces/test/members").status_code == 200
+
+
+@pytest.mark.parametrize("email", ["nobody@example.com", "stranger@example.com"])
+def test_removing_someone_who_is_not_a_member(
+    client: TestClient, anonymous: TestClient, workspace: Workspace, email: str
+) -> None:
+    anonymous.post(
+        "/auth/register",
+        json={"email": "stranger@example.com", "name": "Stranger", "password": "a-good-password"},
+    )
+
+    assert client.delete(f"/workspaces/test/members/{email}").status_code == 404

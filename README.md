@@ -2,7 +2,31 @@
 
 FeedbackLens collects user feedback from GitHub issues, CSV files and an embeddable widget, groups it into themes, spots problems that are growing and turns the biggest ones into tickets backed by real quotes.
 
-> **Status:** Phase 5: accounts, workspaces and permissions are in. Widget, cost tracking and deployment are next.
+> **Status:** Feature-complete and running locally end to end, including the production Docker stack. Tagging accuracy is still unmeasured because no `GEMINI_API_KEY` has been set yet — see [Measuring tagging accuracy](#measuring-tagging-accuracy).
+
+## How it fits together
+
+Feedback arrives from three places, is processed in the background, and comes out as themes, answers and tickets. Nothing in the request path waits for an AI call: the API queues work, and the worker does it.
+
+```
+  GitHub issues ─┐
+  CSV upload ────┤                    ┌──────────────┐
+  Widget ────────┘ ──▶  FastAPI  ──▶  │  PostgreSQL  │  items, tags, themes,
+                          │           │  + pgvector  │  jobs, questions,
+                          │           └──────────────┘  tickets, ai_calls
+                          │                  ▲
+                   queues │                  │ polls for work
+                          ▼                  │
+                       ┌─────────────────────┴──┐
+                       │        Worker          │
+                       │  clean → tag → embed   │ ──▶ Gemini
+                       │  → cluster → alert     │
+                       └────────────────────────┘
+
+  Next.js  ──▶  FastAPI          themes · inbox · ask · usage · evals · settings
+```
+
+Each step is resumable: jobs are rows in Postgres taken with `FOR UPDATE SKIP LOCKED`, retried with backoff, and postponed when the model rate-limits. Work already done is skipped by content hash, so re-importing changes nothing and costs nothing.
 
 ## Tech stack
 
@@ -14,13 +38,17 @@ FeedbackLens collects user feedback from GitHub issues, CSV files and an embedda
 | Background jobs | Worker process backed by a Postgres job queue |
 | AI | Gemini (tagging, embeddings, theme naming, answers) |
 | CI | GitHub Actions |
+| Deployment | Docker images for the API, worker and web app |
 
 ## Project layout
 
 ```
 backend/     FastAPI app, database models, migrations, tests
 web/         Next.js frontend
-docker-compose.yml   Local Postgres + pgvector
+evals/       Saved eval baselines
+docker-compose.yml              Local Postgres + pgvector
+docker-compose.production.yml   The whole stack in containers
+Makefile                        Shortcuts for the commands below
 ```
 
 ## Run locally
@@ -67,6 +95,13 @@ Feedback belongs to a workspace, and a workspace is private unless it is marked 
 
 **Create an account** at http://localhost:3000/signin — email, your name, and a password of at least 8 characters. Passwords are stored as scrypt hashes, never as text. Creating a workspace makes you its owner.
 
+The `demo` workspace is created by a migration, so on a fresh database nobody owns it. Take it over after signing up:
+
+```bash
+cd backend
+uv run python -m app.maintenance grant --workspace demo --email you@example.com --role owner
+```
+
 **Roles** decide what you may do in a workspace:
 
 | Role | May |
@@ -75,13 +110,17 @@ Feedback belongs to a workspace, and a workspace is private unless it is marked 
 | `member` | import feedback, correct tags, rename themes, draft and file tickets |
 | `viewer` | read, search and ask questions |
 
-Owners and admins invite people who have already registered:
+`/workspaces/{slug}/settings` is where owners and admins manage all of this: the member list with roles, an invite form, and the product areas the AI classifies feedback into. Members and viewers see the page but not the controls.
+
+Invites also work from the API, for anyone who has already registered:
 
 ```bash
 curl -X POST http://localhost:8000/workspaces/demo/members \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"email": "teammate@example.com", "role": "member"}'
 ```
+
+An invite never grants ownership, and the last owner cannot be removed, so a workspace always has someone who can manage it.
 
 **Behind the scenes:** signing in returns a signed token that lasts `AUTH_TOKEN_DAYS` (7 by default). The web app keeps it in a cookie and sends it as `Authorization: Bearer …`; pages read the same cookie on the server. To call the API directly, `POST /auth/login` and pass the `access_token` the same way, or click **Authorize** in http://localhost:8000/docs.
 
@@ -145,6 +184,15 @@ uv run python -m app.worker        # embeds new items, then groups them
 - Weekly counts per theme are stored, which drives the trend chart now and alerts in a later phase.
 
 Dashboard: http://localhost:3000/workspaces/demo/themes. Endpoints: `GET /workspaces/{slug}/themes` (sort by size, growth or recency), `GET .../themes/{id}`, `PATCH .../themes/{id}` (rename or hide), `POST .../themes/recluster`.
+
+### One theme in depth
+
+`/workspaces/{slug}/themes/{id}` opens a single theme:
+
+- Weekly bars and a growth badge, so a theme that is taking off is obvious
+- Its most typical reports, each with its AI tags (type, area, sentiment, urgency)
+- Rename, and hide a theme you have decided not to act on
+- The ticket panel: draft a GitHub issue from the theme, edit it, and file it once you approve
 
 ## Importing a CSV
 
@@ -226,13 +274,16 @@ Let visitors submit feedback directly from your website. Paste a single `<script
 
 **How it works:**
 
-1. Go to the import page for your workspace (e.g. http://localhost:3000/workspaces/demo/import).
+1. Go to the import page for your workspace (e.g. http://localhost:3000/workspaces/demo/import). Only owners and admins see this section.
 2. Copy the embed snippet shown under "Embeddable feedback widget".
 3. Paste it into your site's HTML, just before `</body>`.
+4. Press **Turn on**. Until you do, submissions are refused.
 
-The widget is self-contained (no dependencies, no build step) and uses Shadow DOM so it cannot clash with your site's styles. Submissions go through the same PII scrubbing pipeline as CSV imports — emails and phone numbers are removed before anything is stored. Tagging and embedding jobs are queued automatically.
+The widget is self-contained (no dependencies, no build step) and uses Shadow DOM so it cannot clash with your site's styles. Submissions go through the same PII scrubbing pipeline as CSV imports — emails and phone numbers are removed before anything is stored. Tagging and embedding jobs are queued automatically, and the same text submitted twice updates the existing report rather than creating a second one.
 
-Endpoints: `POST /workspaces/{slug}/widget/submit` (public, no auth), `GET /workspaces/{slug}/widget/embed`.
+**The switch matters.** Submitting needs no account, which is the whole point, so an always-open endpoint would let anyone push feedback — and AI cost — into any workspace whose name they could guess. A workspace only accepts submissions after an owner or admin turns the widget on, and turning it off again closes the door while keeping the feedback already collected.
+
+Endpoints: `POST /workspaces/{slug}/widget/submit` (public, no auth, only when the widget is on), `GET /workspaces/{slug}/widget/embed` and `POST /workspaces/{slug}/widget/enable` (owners and admins).
 
 ## Measuring tagging accuracy
 
@@ -260,11 +311,13 @@ The GitHub Actions CI workflow runs the eval scorer after tests pass:
   run: |
     uv run python -m app.evals score \
       --workspace demo \
-      --baseline ../../evals/baselines/demo.json \
+      --baseline ../evals/baselines/demo.json \
       --max-drop 3.0
 ```
 
-If any accuracy or macro F1 score drops more than 3 points compared to the saved baseline, the CI step fails and blocks the PR.
+If any accuracy or macro F1 score drops more than 3 points compared to the saved baseline, the step fails and blocks the PR.
+
+**What this checks today:** CI builds a fresh, empty database, so the scorer finds nothing to score and the committed baseline is all zeros. The step proves the scorer and the baseline comparison still run; it cannot yet catch a real accuracy drop. It starts doing that as soon as `GEMINI_API_KEY` is set, tagging has run over the demo workspace and the baseline below is saved from those numbers.
 
 To update the baseline after intentional prompt changes:
 
@@ -279,18 +332,7 @@ View the eval report in the browser at `/workspaces/{slug}/evals`, or fetch it v
 
 ## Deployment
 
-The project ships production-ready Docker images for the backend (FastAPI + uvicorn) and frontend (Next.js standalone).
-
-### Build images
-
-```bash
-# Build both images
-make build
-
-# Or individually
-docker build -t feedbacklens-api backend/
-docker build -t feedbacklens-web web/
-```
+`docker-compose.production.yml` runs the whole thing: Postgres, the API, the worker and the web app. It uses its own project name (`feedbacklens-prod`), so starting it never touches the database `docker compose up` uses for development.
 
 ### Start the full stack
 
@@ -302,9 +344,11 @@ cp .env.example .env
 #   POSTGRES_PASSWORD=...  (required — change from default!)
 #   AUTH_SECRET_KEY=...    (generate with: python -c "import secrets; print(secrets.token_urlsafe(32))")
 #   GEMINI_API_KEY=...
+#   PUBLIC_WEB_URL=...     (where the browser reaches the web app)
+#   PUBLIC_API_URL=...     (where the browser reaches the API)
 ```
 
-Then start all four services (database, API, worker, web):
+Then start all four services:
 
 ```bash
 make up
@@ -312,7 +356,14 @@ make up
 docker compose -f docker-compose.production.yml up -d
 ```
 
-The API is available at http://localhost:8000 and the web app at http://localhost:3000.
+The API is at http://localhost:8000 and the web app at http://localhost:3000. Both images build from source on first run; `make build` rebuilds them.
+
+**Two things to know before deploying somewhere real:**
+
+- **`PUBLIC_API_URL` is baked into the frontend when the image is built**, because Next.js replaces `NEXT_PUBLIC_*` variables in the browser bundle at build time. Changing the address means rebuilding the web image (`docker compose -f docker-compose.production.yml build web`), not just restarting it.
+- **Pages are rendered inside the web container**, where the API is not at its public address — `localhost` there is the web container itself. `API_INTERNAL_URL` (set to `http://api:8000` in the compose file) is the route across the container network. Unset, as in local development, both sides use the public address.
+
+The image does not carry the local embedding model, so the stack sets `EMBEDDING_PROVIDER=gemini`. To run embeddings on your own hardware instead, build the backend with `uv sync --frozen --no-dev --extra local-embeddings` and set `EMBEDDING_PROVIDER=local`.
 
 ### Useful Makefile commands
 
@@ -348,7 +399,8 @@ All configuration is via environment variables. See `.env.example` for the full 
 | `POSTGRES_PASSWORD` | ✅ | Change from the default |
 | `AUTH_SECRET_KEY` | ✅ | Random 32-byte hex, generated once |
 | `GEMINI_API_KEY` | ✅ | For tagging, embeddings and answers |
-| `PUBLIC_WEB_URL` | optional | Public base URL, e.g. `https://feedbacklens.example.com` |
+| `PUBLIC_WEB_URL` | ✅ | Where the web app is reachable. The API allows it through CORS and alerts link to it |
+| `PUBLIC_API_URL` | ✅ | Where the API is reachable. Baked into the frontend at build time |
 | `GITHUB_TOKEN` | optional | Raises GitHub API rate limit to 5,000/hour |
 | `SLACK_WEBHOOK_URL` | optional | Sends trend alerts to Slack |
 | `TICKET_REPO` | optional | GitHub repository to file tickets into |
@@ -383,31 +435,11 @@ The same checks run in GitHub Actions on every push and pull request.
 - [x] Phase 2: theme grouping and dashboard
 - [x] Phase 3: ask questions with cited answers
 - [x] Phase 4: trend alerts, theme to ticket, CSV import
-- Phase 5:
-  - [x] accounts, workspaces and roles
-  - [x] embeddable feedback widget
-  - [x] AI cost tracking
-  - [x] evaluation suite in CI
-  - [x] deployment and public demo
+- [x] Phase 5: accounts and roles, embeddable widget, AI cost tracking, eval suite, Docker deployment
 - [x] Phase 6: theme detail page and workspace settings
 
-## Theme detail
+Still open:
 
-Visit `/workspaces/{slug}/themes/{id}` to see a single theme in depth:
-
-- Full weekly sparkline and growth badge
-- Top 20 feedback items with AI tags (type, area, sentiment, urgency)
-- Inline rename (saved immediately to the API)
-- Ignore / restore toggle
-- Draft-ticket button (drafts a GitHub issue with quotes from the items)
-
-## Workspace settings
-
-Visit `/workspaces/{slug}/settings` to manage a workspace:
-
-- Members list with role badges; owners and admins can remove members
-- Invite form — adds anyone who already has an account
-- Product areas editor — add, edit and remove areas used for AI classification
-- Quick links to all workspace pages
-
-The settings page is read-only for viewers and members; only owners and admins see the edit controls.
+- [ ] Measure tagging accuracy against the checked set (needs a `GEMINI_API_KEY`)
+- [ ] Host the demo workspace somewhere public
+- [ ] Rate-limit question asking on public workspaces, which costs model calls

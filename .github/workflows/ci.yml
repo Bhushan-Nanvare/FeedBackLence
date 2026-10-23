@@ -40,12 +40,14 @@ jobs:
         run: uv run alembic upgrade head
       - name: Test
         run: uv run pytest
+      # CI starts from an empty database, so this proves the scorer and the
+      # baseline comparison still run. The numbers that matter come from the
+      # same command against a workspace with real tags.
       - name: Eval regression check
         run: |
           uv run python -m app.evals score \
             --workspace demo \
-            --baseline ../../evals/baselines/demo.json \
-            --json ../../evals/latest.json \
+            --baseline ../evals/baselines/demo.json \
             --max-drop 3.0
 
   web:

@@ -4,12 +4,13 @@ import type { WidgetEmbed } from "@/lib/api";
 import { getWidgetEmbed } from "@/lib/api-server";
 
 import { ImportForm } from "./import-form";
+import { WidgetPanel } from "./widget-panel";
 
 export default async function ImportPage(props: PageProps<"/workspaces/[slug]/import">) {
   const { slug } = await props.params;
 
-  // Fetch the widget embed snippet — this can fail if the user is not
-  // authenticated, so we catch and show nothing rather than crashing.
+  // The snippet is for owners and admins, so anyone else simply does not see
+  // that section. The CSV importer above it still works for them.
   let embed: WidgetEmbed | null = null;
   try {
     embed = await getWidgetEmbed(slug);
@@ -61,30 +62,7 @@ export default async function ImportPage(props: PageProps<"/workspaces/[slug]/im
       </section>
 
       {/* ---- Embeddable widget section ---- */}
-      {embed && (
-        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-800">
-          <h2 className="text-lg font-medium">Embeddable feedback widget</h2>
-          <p className="text-zinc-600 dark:text-zinc-400">
-            Paste this snippet into your website&apos;s HTML to show a floating &quot;Feedback&quot;
-            button. Visitors can submit feedback without signing in — emails and phone numbers are
-            scrubbed automatically.
-          </p>
-          <pre className="overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900">
-            {embed.snippet}
-          </pre>
-          <div className="flex flex-col gap-1 text-xs text-zinc-500">
-            <p>
-              <strong>Script URL:</strong> {embed.script_url}
-            </p>
-            <p>
-              <strong>API URL:</strong> {embed.api_url}
-            </p>
-            <p>
-              <strong>Workspace:</strong> {embed.workspace_slug}
-            </p>
-          </div>
-        </section>
-      )}
+      {embed && <WidgetPanel slug={slug} embed={embed} />}
     </main>
   );
 }

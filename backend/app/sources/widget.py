@@ -6,8 +6,8 @@ handles the same pipeline as a CSV import — scrub PII, clean the text, create 
 FeedbackItem, and queue tagging and embedding — but for a single item at a time.
 
 Widget submissions are unauthenticated (the whole point is that external visitors
-can send feedback), so we only accept them for workspaces that have a widget
-source enabled.
+can send feedback), so they are only accepted for workspaces whose owner or admin
+has turned the widget on by fetching its embed snippet.
 """
 
 import hashlib
@@ -32,34 +32,43 @@ logger = logging.getLogger(__name__)
 MAX_TITLE_CHARS = 200
 
 
-def get_or_create_widget_source(session: Session, workspace: Workspace) -> Source:
-    """Find the widget source for a workspace, or create one if it does not exist.
-
-    Each workspace has at most one widget source.  Creating it is idempotent:
-    calling this twice returns the same row.
-    """
-    source = session.scalar(
+def widget_source(session: Session, workspace: Workspace) -> Source | None:
+    """The workspace's widget source, whether the widget is currently on or off."""
+    return session.scalar(
         select(Source).where(
             Source.workspace_id == workspace.id,
             Source.kind == "widget",
         )
     )
+
+
+def widget_is_on(source: Source | None) -> bool:
+    """Only a workspace that said yes receives feedback from strangers."""
+    return source is not None and bool(source.config.get("enabled"))
+
+
+def set_widget_enabled(session: Session, workspace: Workspace, enabled: bool) -> Source:
+    """Turn the widget on or off, keeping the source row so its feedback survives.
+
+    Each workspace has at most one widget source, so calling this twice returns the
+    same row with the new setting.
+    """
+    source = widget_source(session, workspace)
     if source is None:
-        source = Source(
-            workspace_id=workspace.id,
-            kind="widget",
-            name="widget",
-            config={},
-        )
+        source = Source(workspace_id=workspace.id, kind="widget", name="widget", config={})
         session.add(source)
         session.flush()
         logger.info("created widget source %s for workspace %s", source.id, workspace.slug)
+    # Replacing the dict rather than mutating it is what marks the column as changed.
+    source.config = {**source.config, "enabled": enabled}
+    logger.info("widget %s for workspace %s", "on" if enabled else "off", workspace.slug)
     return source
 
 
 def submit_feedback(
     session: Session,
     workspace: Workspace,
+    source: Source,
     *,
     text: str,
     email: str | None = None,
@@ -95,13 +104,32 @@ def submit_feedback(
     author_identifier = (email or name or "anonymous").strip()
     hashed_author = author_hash("widget", author_identifier)
 
-    # -- 6. Find or create the widget source for this workspace.
-    source = get_or_create_widget_source(session, workspace)
+    # -- 6. The caller passes the workspace's widget source, which only exists once
+    #    an owner or admin has turned the widget on.
     source.last_synced_at = datetime.now(UTC)
 
     now = datetime.now(UTC)
 
-    # -- 7. Create the feedback item.
+    # -- 7. The same text sent twice is the same report, not a new one. Without this
+    #    the insert below would hit the (source_id, external_id) unique index and fail.
+    existing = session.scalar(
+        select(FeedbackItem).where(
+            FeedbackItem.source_id == source.id,
+            FeedbackItem.external_id == external_id,
+        )
+    )
+    if existing is not None:
+        existing.external_updated_at = now
+        session.flush()
+        logger.info(
+            "widget submission %s already recorded for workspace %s (item %s)",
+            external_id[:8],
+            workspace.slug,
+            existing.id,
+        )
+        return existing
+
+    # -- 8. Create the feedback item.
     item = FeedbackItem(
         workspace_id=workspace.id,
         source_id=source.id,
@@ -124,7 +152,7 @@ def submit_feedback(
     session.add(item)
     session.flush()  # get the id before returning
 
-    # -- 8. Queue tagging and embedding so the worker processes the new item.
+    # -- 9. Queue tagging and embedding so the worker processes the new item.
     request_tagging(session, workspace.id)
     request_embedding(session, workspace.id)
 

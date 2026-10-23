@@ -87,9 +87,7 @@ def add_member(
     "/workspaces/{slug}/members/{email}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def remove_member(
-    email: str, workspace: ManagedWorkspaceDep, session: SessionDep
-) -> None:
+def remove_member(email: str, workspace: ManagedWorkspaceDep, session: SessionDep) -> None:
     """Remove a member from the workspace. Owners cannot remove themselves."""
     target = session.scalar(select(User).where(User.email == email.strip().lower()))
     if target is None:
@@ -105,10 +103,9 @@ def remove_member(
 
     if membership.role == "owner":
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Cannot remove the owner — transfer ownership first",
         )
 
     session.delete(membership)
     session.commit()
-

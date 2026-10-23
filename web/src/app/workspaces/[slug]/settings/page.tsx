@@ -1,51 +1,32 @@
 import Link from "next/link";
 
 import { LoadProblem } from "@/components/load-problem";
-import type { Member, ProductArea, Workspace } from "@/lib/api";
+import type { Member, ProductArea } from "@/lib/api";
 import { currentUser, getMembers, getProductAreas } from "@/lib/api-server";
 
 import { InviteForm, ProductAreasEditor, RemoveMemberButton } from "./actions";
-
-async function getWorkspace(slug: string, token: string | null): Promise<Workspace | null> {
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/workspaces`,
-      {
-        cache: "no-store",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
-    );
-    if (!res.ok) return null;
-    const list = (await res.json()) as Workspace[];
-    return list.find((w) => w.slug === slug) ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export default async function SettingsPage(props: PageProps<"/workspaces/[slug]/settings">) {
   const { slug } = await props.params;
 
   const user = await currentUser();
-  const token = user ? null : null; // currentUser already uses the cookie; getMembers/getProductAreas also use the cookie via api-server helpers
+  const myRole = user?.workspaces.find((workspace) => workspace.slug === slug)?.role ?? null;
+  const canManage = myRole === "owner" || myRole === "admin";
 
   let members: Member[] = [];
   let areas: ProductArea[] = [];
-  let workspace: Workspace | null = null;
   let problem: unknown = null;
 
   try {
-    [members, areas] = await Promise.all([getMembers(slug), getProductAreas(slug)]);
-    // We need the workspace's own fields (name, is_public) — get from the user's membership list
-    workspace = user?.workspaces.find((w) => w.slug === slug)
-      ? ({ slug, name: slug, is_public: false, role: user.workspaces.find((w) => w.slug === slug)!.role } as Workspace)
-      : null;
+    // The member list is for owners and admins only, so asking for it as anyone else
+    // would answer 403 and hide the rest of the page behind an error.
+    [areas, members] = await Promise.all([
+      getProductAreas(slug),
+      canManage ? getMembers(slug) : Promise.resolve([]),
+    ]);
   } catch (error) {
     problem = error;
   }
-
-  const myRole = user?.workspaces.find((w) => w.slug === slug)?.role ?? null;
-  const canManage = myRole === "owner" || myRole === "admin";
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-12">
@@ -75,11 +56,15 @@ export default async function SettingsPage(props: PageProps<"/workspaces/[slug]/
         </p>
       </header>
 
-      {problem && <LoadProblem error={problem} next={`/workspaces/${slug}/settings`} />}
+      {problem !== null && <LoadProblem error={problem} next={`/workspaces/${slug}/settings`} />}
 
       {/* ── Members ── */}
       <Section title="Members">
-        {members.length === 0 ? (
+        {!canManage ? (
+          <p className="text-sm text-zinc-500">
+            Only owners and admins can see who is in a workspace.
+          </p>
+        ) : members.length === 0 ? (
           <p className="text-sm text-zinc-500">No members found.</p>
         ) : (
           <div className="flex flex-col divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">

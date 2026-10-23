@@ -294,6 +294,12 @@ class WidgetSubmissionResult(BaseModel):
     message: str = "Thank you for your feedback!"
 
 
+class WidgetToggle(BaseModel):
+    """Turns public widget submissions on or off."""
+
+    enabled: bool
+
+
 class WidgetEmbed(BaseModel):
     """The embed snippet and configuration shown to workspace admins."""
 
@@ -305,6 +311,8 @@ class WidgetEmbed(BaseModel):
     api_url: str
     # A ready-to-paste HTML snippet.
     snippet: str
+    # Whether the workspace is currently accepting submissions from the widget.
+    enabled: bool
 
 
 class TicketDraftRequest(BaseModel):

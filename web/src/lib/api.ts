@@ -1,6 +1,22 @@
 import { readTokenInBrowser } from "./session";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/** Where the browser sends API requests. Next.js bakes this in when building. */
+const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/**
+ * The address to use for this request.
+ *
+ * Pages are rendered on the server, which in a container cannot reach the API at
+ * its public address — "localhost" there is the web container itself. API_INTERNAL_URL
+ * (for example http://api:8000) is the way across the container network. Unset, as it
+ * is in local development, both sides use the public address.
+ */
+function apiUrl(): string {
+  if (typeof window === "undefined") {
+    return process.env.API_INTERNAL_URL || PUBLIC_API_URL;
+  }
+  return PUBLIC_API_URL;
+}
 
 export type Health = {
   status: "ok" | "degraded";
@@ -212,6 +228,7 @@ export type WidgetEmbed = {
   workspace_slug: string;
   api_url: string;
   snippet: string;
+  enabled: boolean;
 };
 
 /** Precision, recall and F1 for one label value (e.g. "bug"). */
@@ -258,7 +275,7 @@ export class ApiError extends Error {
 /** Returns the API health report, or null when the API itself is unreachable. */
 export async function getHealth(): Promise<Health | null> {
   try {
-    const response = await fetch(`${API_URL}/health`, { cache: "no-store" });
+    const response = await fetch(`${apiUrl()}/health`, { cache: "no-store" });
     // A 503 still carries a JSON body saying which dependency is down.
     return (await response.json()) as Health;
   } catch {
@@ -456,6 +473,15 @@ export async function getWidgetEmbed(
   return request<WidgetEmbed>(`/workspaces/${slug}/widget/embed`, undefined, token);
 }
 
+/** Turn public widget submissions on or off. Owners and admins only. */
+export async function setWidgetEnabled(slug: string, enabled: boolean): Promise<WidgetEmbed> {
+  return request<WidgetEmbed>(`/workspaces/${slug}/widget/enable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+}
+
 /** Fetch the evaluation report (accuracy vs checked labels) for a workspace. */
 export async function getEvalReport(
   slug: string,
@@ -486,7 +512,7 @@ async function request<T>(path: string, init?: RequestInit, token?: string | nul
   if (bearer) {
     headers.set("Authorization", `Bearer ${bearer}`);
   }
-  const response = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init, headers });
+  const response = await fetch(`${apiUrl()}${path}`, { cache: "no-store", ...init, headers });
   if (!response.ok) {
     throw new ApiError(await explain(response), response.status);
   }

@@ -1,0 +1,31 @@
+# backend/.dockerignore
+# Used when building the backend image (docker build -t feedbacklens-api backend/).
+# Keeps build context lean so the layer cache is effective.
+
+# Python artefacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual environment (deps are installed fresh inside the image by uv)
+.venv/
+
+# Local environment (secrets must never end up in an image layer)
+.env
+.env.*
+!.env.example
+
+# Tests (not needed in the production runtime stage)
+tests/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

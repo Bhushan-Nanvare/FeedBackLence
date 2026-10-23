@@ -8,12 +8,13 @@ And a backend module (app.sources.widget) that handles PII scrubbing, item
 creation and job queueing.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.main import app
-from app.models import FeedbackItem, Job, Source, Workspace
+from app.models import FeedbackItem, Job, Membership, Source, User, Workspace
 
 # ---------------------------------------------------------------------------
 # Helper — build an anonymous test client (no auth headers) since the
@@ -26,6 +27,17 @@ def anon_client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture
+def widget_on(db: Session, workspace: Workspace) -> Source:
+    """The widget switched on, as an owner would from the import page."""
+    source = Source(
+        workspace_id=workspace.id, kind="widget", name="widget", config={"enabled": True}
+    )
+    db.add(source)
+    db.commit()
+    return source
+
+
 # ---------------------------------------------------------------------------
 # POST /workspaces/{slug}/widget/submit
 # ---------------------------------------------------------------------------
@@ -35,7 +47,7 @@ class TestWidgetSubmit:
     """The public submission endpoint."""
 
     def test_submit_creates_a_feedback_item(
-        self, client: TestClient, db: Session, workspace: Workspace
+        self, client: TestClient, db: Session, workspace: Workspace, widget_on: Source
     ) -> None:
         """A simple submission should create a FeedbackItem and return its id."""
         body = {"text": "The search feature is really slow when I type long queries"}
@@ -54,7 +66,9 @@ class TestWidgetSubmit:
         assert item.workspace_id == workspace.id
         assert "search" in item.body_clean.lower()
 
-    def test_submit_works_without_authentication(self, db: Session, workspace: Workspace) -> None:
+    def test_submit_works_without_authentication(
+        self, db: Session, workspace: Workspace, widget_on: Source
+    ) -> None:
         """The whole point of the widget — anonymous visitors can submit."""
         anon = anon_client()
         resp = anon.post(
@@ -66,7 +80,7 @@ class TestWidgetSubmit:
         assert resp.json()["item_id"] > 0
 
     def test_submit_scrubs_email_addresses(
-        self, client: TestClient, db: Session, workspace: Workspace
+        self, client: TestClient, db: Session, workspace: Workspace, widget_on: Source
     ) -> None:
         """PII must be stripped before anything is stored."""
         resp = client.post(
@@ -81,26 +95,56 @@ class TestWidgetSubmit:
         assert "john@example.com" not in item.body_clean
         assert "[email]" in item.body_raw
 
-    def test_submit_creates_widget_source(
-        self, client: TestClient, db: Session, workspace: Workspace
+    def test_submit_is_refused_until_the_widget_is_turned_on(
+        self, db: Session, workspace: Workspace
     ) -> None:
-        """The first submission should auto-create a Source(kind='widget')."""
-        client.post(
+        """Nobody can push feedback into a workspace that never asked for a widget."""
+        resp = anon_client().post(
             "/workspaces/test/widget/submit",
-            json={"text": "This is a test submission for the widget"},
+            json={"text": "Feedback nobody asked for"},
         )
 
+        assert resp.status_code == 404
+        assert db.scalars(select(FeedbackItem)).all() == []
+
+    def test_turning_the_widget_on_opens_it_to_strangers(
+        self, client: TestClient, db: Session, workspace: Workspace
+    ) -> None:
+        """An owner switches it on, and only then are submissions accepted."""
+        turned_on = client.post("/workspaces/test/widget/enable", json={"enabled": True})
+
+        assert turned_on.status_code == 200
+        assert turned_on.json()["enabled"] is True
         source = db.scalar(
             select(Source).where(
                 Source.workspace_id == workspace.id,
                 Source.kind == "widget",
             )
         )
-        assert source is not None
-        assert source.name == "widget"
+        assert source is not None and source.config["enabled"] is True
+        assert (
+            anon_client()
+            .post("/workspaces/test/widget/submit", json={"text": "Now the widget is live"})
+            .status_code
+            == 201
+        )
+
+    def test_turning_the_widget_off_stops_submissions_but_keeps_feedback(
+        self, client: TestClient, db: Session, workspace: Workspace, widget_on: Source
+    ) -> None:
+        """Switching off closes the door; what came through it stays."""
+        anon_client().post("/workspaces/test/widget/submit", json={"text": "Collected while on"})
+
+        client.post("/workspaces/test/widget/enable", json={"enabled": False})
+
+        refused = anon_client().post(
+            "/workspaces/test/widget/submit", json={"text": "Sent after the switch off"}
+        )
+        assert refused.status_code == 404
+        assert len(db.scalars(select(FeedbackItem)).all()) == 1
 
     def test_submit_queues_tagging_and_embedding(
-        self, client: TestClient, db: Session, workspace: Workspace
+        self, client: TestClient, db: Session, workspace: Workspace, widget_on: Source
     ) -> None:
         """After a submission, tagging and embedding jobs should be queued."""
         client.post(
@@ -127,7 +171,7 @@ class TestWidgetSubmit:
         assert resp.status_code == 404
 
     def test_duplicate_text_does_not_create_two_items(
-        self, client: TestClient, db: Session, workspace: Workspace
+        self, client: TestClient, db: Session, workspace: Workspace, widget_on: Source
     ) -> None:
         """Submitting the exact same text twice should create only one item."""
         body = {"text": "Exact same feedback submitted twice"}
@@ -146,7 +190,7 @@ class TestWidgetSubmit:
         assert len(items) == 1
 
     def test_submit_with_optional_name_and_email(
-        self, client: TestClient, db: Session, workspace: Workspace
+        self, client: TestClient, db: Session, workspace: Workspace, widget_on: Source
     ) -> None:
         """Name and email are accepted but the email is scrubbed from stored text."""
         resp = client.post(
@@ -183,10 +227,27 @@ class TestWidgetEmbed:
         assert "widget.js" in data["script_url"]
         assert 'data-workspace="test"' in data["snippet"]
         assert "<script" in data["snippet"]
+        # Looking at the snippet does not switch the widget on.
+        assert data["enabled"] is False
 
-    def test_embed_requires_readable_workspace(self) -> None:
-        """An anonymous user should not see the embed for a private workspace."""
-        anon = anon_client()
-        resp = anon.get("/workspaces/test/widget/embed")
-        # "test" workspace is private and the client has no auth → 401.
-        assert resp.status_code == 401
+    def test_embed_is_for_owners_and_admins_only(
+        self, client: TestClient, db: Session, workspace: Workspace
+    ) -> None:
+        """Turning the widget on decides who may write, so members cannot do it."""
+        token = (
+            anon_client()
+            .post(
+                "/auth/register",
+                json={"email": "m@example.com", "name": "M", "password": "a-good-password"},
+            )
+            .json()["access_token"]
+        )
+        user = db.scalar(select(User).where(User.email == "m@example.com"))
+        assert user is not None
+        db.add(Membership(workspace_id=workspace.id, user_id=user.id, role="member"))
+        db.commit()
+        member = TestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+        assert anon_client().get("/workspaces/test/widget/embed").status_code == 401
+        assert member.get("/workspaces/test/widget/embed").status_code == 403
+        assert client.get("/workspaces/test/widget/embed").status_code == 200
